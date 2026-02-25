@@ -4,7 +4,7 @@ pub mod tests {
 
     pub fn setup_env() -> Env {
         let env = Env::default();
-        env.mock_all_auths();
+        env.mock_all_auths_allowing_non_root_auth();
         env.ledger().set(LedgerInfo {
             timestamp: 1704067200, // Jan 1, 2024
             protocol_version: 20,

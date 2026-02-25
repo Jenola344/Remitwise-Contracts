@@ -659,6 +659,12 @@
                       "val": {
                         "u64": 1735689600
                       }
+                    },
+                    {
+                      "key": {
+                        "symbol": "unlock_date"
+                      },
+                      "val": "void"
                     }
                   ]
                 },
@@ -725,6 +731,12 @@
                       "val": {
                         "u64": 1735689600
                       }
+                    },
+                    {
+                      "key": {
+                        "symbol": "unlock_date"
+                      },
+                      "val": "void"
                     }
                   ]
                 }

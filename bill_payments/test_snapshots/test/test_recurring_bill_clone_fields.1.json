@@ -35,7 +35,7 @@
                   "u32": 30
                 },
                 {
-                  "string": "USD"
+                  "string": "XLM"
                 }
               ]
             }
@@ -137,7 +137,7 @@
                                       "symbol": "currency"
                                     },
                                     "val": {
-                                      "string": "USD"
+                                      "string": "XLM"
                                     }
                                   },
                                   {
@@ -243,7 +243,7 @@
                                       "symbol": "currency"
                                     },
                                     "val": {
-                                      "string": "USD"
+                                      "string": "XLM"
                                     }
                                   },
                                   {
@@ -490,7 +490,7 @@
                   "u32": 30
                 },
                 {
-                  "string": "USD"
+                  "string": "XLM"
                 }
               ]
             }
@@ -730,7 +730,7 @@
                     "symbol": "currency"
                   },
                   "val": {
-                    "string": "USD"
+                    "string": "XLM"
                   }
                 },
                 {

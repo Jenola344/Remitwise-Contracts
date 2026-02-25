@@ -229,14 +229,14 @@ pub trait SavingsGoalsTrait {
 
 #[contractclient(name = "BillPaymentsClient")]
 pub trait BillPaymentsTrait {
-    fn get_unpaid_bills(env: Env, owner: Address) -> Vec<Bill>;
+    fn get_unpaid_bills(env: Env, owner: Address, cursor: u32, limit: u32) -> BillPage;
     fn get_total_unpaid(env: Env, owner: Address) -> i128;
-    fn get_all_bills(env: Env) -> Vec<Bill>;
+    fn get_all_bills_for_owner(env: Env, owner: Address, cursor: u32, limit: u32) -> BillPage;
 }
 
 #[contractclient(name = "InsuranceClient")]
 pub trait InsuranceTrait {
-    fn get_active_policies(env: Env, owner: Address) -> Vec<InsurancePolicy>;
+    fn get_active_policies(env: Env, owner: Address, cursor: u32, limit: u32) -> PolicyPage;
     fn get_total_monthly_premium(env: Env, owner: Address) -> i128;
 }
 
@@ -274,6 +274,14 @@ pub struct Bill {
 
 #[contracttype]
 #[derive(Clone)]
+pub struct BillPage {
+    pub items: Vec<Bill>,
+    pub next_cursor: u32,
+    pub count: u32,
+}
+
+#[contracttype]
+#[derive(Clone)]
 pub struct InsurancePolicy {
     pub id: u32,
     pub owner: Address,
@@ -283,6 +291,14 @@ pub struct InsurancePolicy {
     pub coverage_amount: i128,
     pub active: bool,
     pub next_payment_date: u64,
+}
+
+#[contracttype]
+#[derive(Clone)]
+pub struct PolicyPage {
+    pub items: Vec<InsurancePolicy>,
+    pub next_cursor: u32,
+    pub count: u32,
 }
 
 #[contract]
@@ -484,7 +500,8 @@ impl ReportingContract {
             .expect("Contract addresses not configured");
 
         let bill_client = BillPaymentsClient::new(&env, &addresses.bill_payments);
-        let all_bills = bill_client.get_all_bills();
+        let page = bill_client.get_all_bills_for_owner(&user, &0u32, &50u32);
+        let all_bills = page.items;
 
         let mut total_bills = 0u32;
         let mut paid_bills = 0u32;
@@ -497,10 +514,6 @@ impl ReportingContract {
         let current_time = env.ledger().timestamp();
 
         for bill in all_bills.iter() {
-            if bill.owner != user {
-                continue;
-            }
-
             // Filter by period
             if bill.created_at < period_start || bill.created_at > period_end {
                 continue;
@@ -555,7 +568,9 @@ impl ReportingContract {
             .expect("Contract addresses not configured");
 
         let insurance_client = InsuranceClient::new(&env, &addresses.insurance);
-        let policies = insurance_client.get_active_policies(&user);
+        let policies = insurance_client
+            .get_active_policies(&user, &0u32, &50u32)
+            .items;
         let monthly_premium = insurance_client.get_total_monthly_premium(&user);
 
         let mut total_coverage = 0i128;
@@ -613,7 +628,7 @@ impl ReportingContract {
 
         // Bills score (0-40 points)
         let bill_client = BillPaymentsClient::new(&env, &addresses.bill_payments);
-        let unpaid_bills = bill_client.get_unpaid_bills(&user);
+        let unpaid_bills = bill_client.get_unpaid_bills(&user, &0u32, &50u32).items;
         let bills_score = if unpaid_bills.is_empty() {
             40
         } else {
@@ -630,7 +645,9 @@ impl ReportingContract {
 
         // Insurance score (0-20 points)
         let insurance_client = InsuranceClient::new(&env, &addresses.insurance);
-        let policies = insurance_client.get_active_policies(&user);
+        let policies = insurance_client
+            .get_active_policies(&user, &0u32, &50u32)
+            .items;
         let insurance_score = if !policies.is_empty() { 20 } else { 0 };
 
         let total_score = savings_score + bills_score + insurance_score;
