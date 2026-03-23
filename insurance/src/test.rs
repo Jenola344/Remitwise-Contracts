@@ -1476,3 +1476,48 @@ fn test_time_drift_no_double_execution_after_schedule_advances() {
         "Schedule must not re-execute before the new next_due"
     );
 }
+
+#[test]
+fn test_batch_pay_premiums_deterministic_partial_success() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, Insurance);
+    let client = InsuranceClient::new(&env, &contract_id);
+    let owner1 = Address::generate(&env);
+    let owner2 = Address::generate(&env);
+
+    env.mock_all_auths();
+    set_time(&env, 1000);
+
+    // Create 3 policies for owner1: 2 active, 1 will be deactivated
+    let p1 = client.create_policy(&owner1, &String::from_str(&env, "P1"), &CoverageType::Health, &100, &1000);
+    let p2 = client.create_policy(&owner1, &String::from_str(&env, "P2"), &CoverageType::Health, &200, &2000);
+    let p3 = client.create_policy(&owner1, &String::from_str(&env, "P3"), &CoverageType::Health, &300, &3000);
+    
+    // Create 1 policy for owner2
+    let p4 = client.create_policy(&owner2, &String::from_str(&env, "P4"), &CoverageType::Health, &400, &4000);
+
+    // Deactivate p3
+    client.deactivate_policy(&owner1, &p3);
+
+    // Owner1 attempts to batch pay [P1, P2, P3 (inactive), P4 (wrong owner)]
+    let mut batch_ids = soroban_sdk::Vec::new(&env);
+    batch_ids.push_back(p1);
+    batch_ids.push_back(p2);
+    batch_ids.push_back(p3);
+    batch_ids.push_back(p4);
+
+    let paid_count = client.batch_pay_premiums(&owner1, &batch_ids);
+
+    // Expected: Only p1 and p2 should be paid. p3 is skipped (inactive), p4 skipped (unauthorized).
+    assert_eq!(paid_count, 2, "Only 2 valid policies should have been paid");
+
+    let p1_state = client.get_policy(&p1).unwrap();
+    let p3_state = client.get_policy(&p3).unwrap();
+    let p4_state = client.get_policy(&p4).unwrap();
+
+    assert!(p1_state.next_payment_date > 1000, "Valid policy next_payment_date delayed");
+    assert_eq!(p3_state.next_payment_date, 1000 + 30 * 86400, "Inactive policy next_payment_date unmodified (it got 30d at creation step)");
+    
+    // For p4, we check its payment date wasn't updated by owner1's attempt
+    assert_eq!(p4_state.next_payment_date, 1000 + 30 * 86400, "Unauthorized policy next_payment_date unmodified");
+}

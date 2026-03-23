@@ -99,6 +99,20 @@ Pays monthly premium for a policy.
 
 **Panics:** If caller is not owner, policy not found, or policy inactive
 
+#### `batch_pay_premiums(env, caller, policy_ids) -> Result<u32, InsuranceError>`
+
+Executes a batch premium payment with deterministic mixed-state semantics.
+Valid policies (matching `caller` and active) are successfully updated. Invalid policies in the batch are skipped securely without trapping the entire transaction.
+
+**Parameters:**
+
+- `caller`: Address of the caller (must authorize)
+- `policy_ids`: Vector of policy IDs to be paid
+
+**Returns:** The number of successfully processed payments (partial successes supported).
+
+**Errors:** Returns `BatchTooLarge` if list exceeds 50.
+
 #### `get_policy(env, policy_id) -> Option<InsurancePolicy>`
 
 Retrieves a policy by ID.
@@ -198,6 +212,7 @@ let all_policies = all_policies_page.items;
 - `InsuranceEvent::PolicyCreated`: When a policy is created
 - `InsuranceEvent::PremiumPaid`: When a premium is paid
 - `InsuranceEvent::PolicyDeactivated`: When a policy is deactivated
+- `InsuranceEvent::BatchPaymentResult`: Emitted after batch processing, indicating success counts and the total attempted (partial success reporting).
 
 ## Integration Patterns
 

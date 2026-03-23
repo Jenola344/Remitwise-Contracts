@@ -155,6 +155,7 @@ pub enum InsuranceEvent {
     ScheduleMissed,
     ScheduleModified,
     ScheduleCancelled,
+    BatchPaymentResult,
 }
 
 #[contract]
@@ -869,46 +870,41 @@ impl Insurance {
             .instance()
             .get(&symbol_short!("POLICIES"))
             .unwrap_or_else(|| Map::new(&env));
-        for id in policy_ids.iter() {
-            let policy = match policies_map.get(id) {
-                Some(p) => p,
-                None => return Err(InsuranceError::PolicyNotFound),
-            };
-            if policy.owner != caller {
-                return Err(InsuranceError::Unauthorized);
-            }
-            if !policy.active {
-                return Err(InsuranceError::PolicyInactive);
-            }
-        }
 
         let current_time = env.ledger().timestamp();
         let mut paid_count = 0;
+        let total_attempted = policy_ids.len();
+
         for id in policy_ids.iter() {
-            let mut policy = policies.get(id).unwrap_or_else(|| panic!("Policy not found"));
-            let mut policy = policies_map.get(id).unwrap();
-            policy.next_payment_date = current_time + (30 * 86400);
-            let event = PremiumPaidEvent {
-                policy_id: id,
-                name: policy.name.clone(),
-                amount: policy.monthly_premium,
-                next_payment_date: policy.next_payment_date,
-                timestamp: current_time,
-            };
-            env.events().publish((PREMIUM_PAID,), event);
-            env.events().publish(
-                (symbol_short!("insure"), InsuranceEvent::PremiumPaid),
-                (id, caller.clone()),
-            );
-            policies_map.set(id, policy);
-            paid_count += 1;
+            if let Some(mut policy) = policies_map.get(id) {
+                // Determine if policy can be paid securely: owned by caller and is active
+                if policy.owner == caller && policy.active {
+                    policy.next_payment_date = current_time + (30 * 86400);
+                    let event = PremiumPaidEvent {
+                        policy_id: id,
+                        name: policy.name.clone(),
+                        amount: policy.monthly_premium,
+                        next_payment_date: policy.next_payment_date,
+                        timestamp: current_time,
+                    };
+                    env.events().publish((PREMIUM_PAID,), event);
+                    env.events().publish(
+                        (symbol_short!("insure"), InsuranceEvent::PremiumPaid),
+                        (id, caller.clone()),
+                    );
+                    policies_map.set(id, policy);
+                    paid_count += 1;
+                }
+            }
         }
+        // Atomic state transition for the entire partially successful batch
         env.storage()
             .instance()
             .set(&symbol_short!("POLICIES"), &policies_map);
+            
         env.events().publish(
-            (symbol_short!("insure"), symbol_short!("batch_pay")),
-            (paid_count, caller),
+            (symbol_short!("insure"), InsuranceEvent::BatchPaymentResult),
+            (paid_count, total_attempted, caller),
         );
         Ok(paid_count)
     }
