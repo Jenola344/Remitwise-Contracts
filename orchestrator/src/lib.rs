@@ -13,12 +13,21 @@
 //! ## Architecture
 //!
 //! The orchestrator acts as a coordination layer that:
-//! 1. Validates permissions via the Family Wallet contract
-//! 2. Calculates remittance splits via the Remittance Split contract
-//! 3. Executes downstream operations:
+//! 1. Validates configured contract addresses before execution
+//! 2. Validates permissions via the Family Wallet contract
+//! 3. Calculates remittance splits via the Remittance Split contract
+//! 4. Executes downstream operations:
 //!    - Deposits to Savings Goals
 //!    - Pays Bills
 //!    - Pays Insurance Premiums
+//!
+//! ## Address Validation
+//!
+//! Before executing any cross-contract calls, the orchestrator validates:
+//! - No address references the orchestrator itself (prevents self-referential calls)
+//! - All addresses are distinct (prevents misconfiguration where same contract serves multiple roles)
+//!
+//! This validation occurs early in the execution flow to minimize gas costs on invalid inputs.
 //!
 //! ## Atomicity Guarantees
 //!
@@ -30,10 +39,11 @@
 //! ## Gas Estimation
 //!
 //! Typical gas costs for orchestrator operations:
+//! - Address validation: ~500 gas
 //! - Permission check: ~2,000 gas
 //! - Remittance split calculation: ~3,000 gas
 //! - Each downstream operation: ~4,000 gas
-//! - Complete remittance flow: ~22,000 gas
+//! - Complete remittance flow: ~22,500 gas
 //!
 //! ## Usage Example
 //!
@@ -192,6 +202,10 @@ pub enum OrchestratorError {
     InvalidContractAddress = 8,
     /// Generic cross-contract call failure
     CrossContractCallFailed = 9,
+    /// Duplicate contract addresses detected
+    DuplicateContractAddress = 10,
+    /// Contract address references the orchestrator itself
+    SelfReferenceNotAllowed = 11,
 }
 
 /// Result of a complete remittance flow execution
@@ -295,6 +309,119 @@ pub struct Orchestrator;
 #[allow(clippy::manual_inspect)]
 #[contractimpl]
 impl Orchestrator {
+    // ============================================================================
+    // Helper Functions - Address Validation
+    // ============================================================================
+
+    /// Validate that a contract address is not the orchestrator itself.
+    ///
+    /// Prevents self-referential calls that could cause unexpected behavior
+    /// or infinite loops in cross-contract invocations.
+    ///
+    /// # Arguments
+    /// * `env` - The contract environment
+    /// * `addr` - Address to validate
+    ///
+    /// # Returns
+    /// Ok(()) if valid, Err(OrchestratorError::SelfReferenceNotAllowed) if self-reference
+    fn validate_not_self(env: &Env, addr: &Address) -> Result<(), OrchestratorError> {
+        if *addr == env.current_contract_address() {
+            return Err(OrchestratorError::SelfReferenceNotAllowed);
+        }
+        Ok(())
+    }
+
+    /// Validate that two addresses are not duplicates.
+    ///
+    /// Ensures different contract roles are assigned to distinct addresses,
+    /// preventing misconfiguration where the same contract handles multiple roles.
+    ///
+    /// # Arguments
+    /// * `addr1` - First address
+    /// * `addr2` - Second address
+    ///
+    /// # Returns
+    /// Ok(()) if distinct, Err(OrchestratorError::DuplicateContractAddress) if duplicates
+    fn validate_no_duplicates(addr1: &Address, addr2: &Address) -> Result<(), OrchestratorError> {
+        if addr1 == addr2 {
+            return Err(OrchestratorError::DuplicateContractAddress);
+        }
+        Ok(())
+    }
+
+    /// Validate addresses for dual-contract operations (e.g., savings deposit).
+    ///
+    /// Performs comprehensive validation for operations involving two contracts:
+    /// - Neither address references the orchestrator
+    /// - Addresses are not duplicates
+    ///
+    /// # Arguments
+    /// * `env` - The contract environment
+    /// * `addr1` - First contract address
+    /// * `addr2` - Second contract address
+    ///
+    /// # Returns
+    /// Ok(()) if all validations pass
+    fn validate_dual_contract_addresses(
+        env: &Env,
+        addr1: &Address,
+        addr2: &Address,
+    ) -> Result<(), OrchestratorError> {
+        Self::validate_not_self(env, addr1)?;
+        Self::validate_not_self(env, addr2)?;
+        Self::validate_no_duplicates(addr1, addr2)?;
+        Ok(())
+    }
+
+    /// Validate addresses for the complete remittance flow.
+    ///
+    /// Performs comprehensive validation for all five downstream contracts:
+    /// - No address references the orchestrator itself
+    /// - All addresses are distinct from each other
+    ///
+    /// This prevents misconfiguration scenarios such as:
+    /// - Self-referential calls causing infinite loops
+    /// - Same contract used for multiple roles causing unexpected behavior
+    ///
+    /// # Arguments
+    /// * `env` - The contract environment
+    /// * `family_wallet_addr` - Family wallet contract address
+    /// * `remittance_split_addr` - Remittance split contract address
+    /// * `savings_addr` - Savings goals contract address
+    /// * `bills_addr` - Bill payments contract address
+    /// * `insurance_addr` - Insurance contract address
+    ///
+    /// # Returns
+    /// Ok(()) if all validations pass
+    fn validate_remittance_flow_addresses(
+        env: &Env,
+        family_wallet_addr: &Address,
+        remittance_split_addr: &Address,
+        savings_addr: &Address,
+        bills_addr: &Address,
+        insurance_addr: &Address,
+    ) -> Result<(), OrchestratorError> {
+        let addresses = [
+            family_wallet_addr,
+            remittance_split_addr,
+            savings_addr,
+            bills_addr,
+            insurance_addr,
+        ];
+
+        for addr in addresses.iter() {
+            Self::validate_not_self(env, addr)?;
+        }
+
+        for i in 0..addresses.len() {
+            for j in (i + 1)..addresses.len() {
+                Self::validate_no_duplicates(addresses[i], addresses[j])?;
+            }
+        }
+
+        Ok(())
+    }
+
     // ============================================================================
     // Helper Functions - Family Wallet Permission Checking
     // ============================================================================
@@ -656,12 +783,23 @@ impl Orchestrator {
         savings_addr: Address,
         goal_id: u32,
     ) -> Result<(), OrchestratorError> {
-        // Require caller authorization
         caller.require_auth();
 
         let timestamp = env.ledger().timestamp();
 
-        // Step 1: Check family wallet permission
+        Self::validate_dual_contract_addresses(&env, &family_wallet_addr, &savings_addr).map_err(
+            |e| {
+                Self::emit_error_event(
+                    &env,
+                    &caller,
+                    symbol_short!("addr_val"),
+                    e as u32,
+                    timestamp,
+                );
+                e
+            },
+        )?;
+
         Self::check_family_wallet_permission(&env, &family_wallet_addr, &caller, amount).map_err(
             |e| {
                 Self::emit_error_event(
@@ -675,7 +813,6 @@ impl Orchestrator {
             },
         )?;
 
-        // Step 2: Check spending limit
         Self::check_spending_limit(&env, &family_wallet_addr, &caller, amount).map_err(|e| {
             Self::emit_error_event(
                 &env,
@@ -687,7 +824,6 @@ impl Orchestrator {
             e
         })?;
 
-        // Step 3: Deposit to savings
         Self::deposit_to_savings(&env, &savings_addr, &caller, goal_id, amount).map_err(|e| {
             Self::emit_error_event(&env, &caller, symbol_short!("savings"), e as u32, timestamp);
             e
@@ -737,12 +873,23 @@ impl Orchestrator {
         bills_addr: Address,
         bill_id: u32,
     ) -> Result<(), OrchestratorError> {
-        // Require caller authorization
         caller.require_auth();
 
         let timestamp = env.ledger().timestamp();
 
-        // Step 1: Check family wallet permission
+        Self::validate_dual_contract_addresses(&env, &family_wallet_addr, &bills_addr).map_err(
+            |e| {
+                Self::emit_error_event(
+                    &env,
+                    &caller,
+                    symbol_short!("addr_val"),
+                    e as u32,
+                    timestamp,
+                );
+                e
+            },
+        )?;
+
         Self::check_family_wallet_permission(&env, &family_wallet_addr, &caller, amount).map_err(
             |e| {
                 Self::emit_error_event(
@@ -756,7 +903,6 @@ impl Orchestrator {
             },
         )?;
 
-        // Step 2: Check spending limit
         Self::check_spending_limit(&env, &family_wallet_addr, &caller, amount).map_err(|e| {
             Self::emit_error_event(
                 &env,
@@ -768,7 +914,6 @@ impl Orchestrator {
             e
         })?;
 
-        // Step 3: Execute bill payment
         Self::execute_bill_payment_internal(&env, &bills_addr, &caller, bill_id).map_err(|e| {
             Self::emit_error_event(&env, &caller, symbol_short!("bills"), e as u32, timestamp);
             e
@@ -818,12 +963,22 @@ impl Orchestrator {
         insurance_addr: Address,
         policy_id: u32,
     ) -> Result<(), OrchestratorError> {
-        // Require caller authorization
         caller.require_auth();
 
         let timestamp = env.ledger().timestamp();
 
-        // Step 1: Check family wallet permission
+        Self::validate_dual_contract_addresses(&env, &family_wallet_addr, &insurance_addr)
+            .map_err(|e| {
+                Self::emit_error_event(
+                    &env,
+                    &caller,
+                    symbol_short!("addr_val"),
+                    e as u32,
+                    timestamp,
+                );
+                e
+            })?;
+
         Self::check_family_wallet_permission(&env, &family_wallet_addr, &caller, amount).map_err(
             |e| {
                 Self::emit_error_event(
@@ -837,7 +992,6 @@ impl Orchestrator {
             },
         )?;
 
-        // Step 2: Check spending limit
         Self::check_spending_limit(&env, &family_wallet_addr, &caller, amount).map_err(|e| {
             Self::emit_error_event(
                 &env,
@@ -849,7 +1003,6 @@ impl Orchestrator {
             e
         })?;
 
-        // Step 3: Pay insurance premium
         Self::pay_insurance_premium(&env, &insurance_addr, &caller, policy_id).map_err(|e| {
             Self::emit_error_event(
                 &env,
@@ -861,7 +1014,6 @@ impl Orchestrator {
             e
         })?;
 
-        // Emit success event
         let allocations = Vec::from_array(&env, [0, 0, 0, amount]);
         Self::emit_success_event(&env, &caller, amount, &allocations, timestamp);
 
@@ -933,12 +1085,29 @@ impl Orchestrator {
         bill_id: u32,
         policy_id: u32,
     ) -> Result<RemittanceFlowResult, OrchestratorError> {
-        // Require caller authorization
         caller.require_auth();
 
         let timestamp = env.ledger().timestamp();
 
-        // Step 1: Validate amount
+        Self::validate_remittance_flow_addresses(
+            &env,
+            &family_wallet_addr,
+            &remittance_split_addr,
+            &savings_addr,
+            &bills_addr,
+            &insurance_addr,
+        )
+        .map_err(|e| {
+            Self::emit_error_event(
+                &env,
+                &caller,
+                symbol_short!("addr_val"),
+                e as u32,
+                timestamp,
+            );
+            e
+        })?;
+
         if total_amount <= 0 {
             Self::emit_error_event(
                 &env,
@@ -950,7 +1119,6 @@ impl Orchestrator {
             return Err(OrchestratorError::InvalidAmount);
         }
 
-        // Step 2: Check family wallet permission
         Self::check_family_wallet_permission(&env, &family_wallet_addr, &caller, total_amount)
             .map_err(|e| {
                 Self::emit_error_event(
@@ -963,7 +1131,6 @@ impl Orchestrator {
                 e
             })?;
 
-        // Step 3: Check spending limit
         Self::check_spending_limit(&env, &family_wallet_addr, &caller, total_amount).map_err(
             |e| {
                 Self::emit_error_event(
@@ -977,7 +1144,6 @@ impl Orchestrator {
             },
         )?;
 
-        // Step 4: Extract allocations from remittance split
         let allocations = Self::extract_allocations(&env, &remittance_split_addr, total_amount)
             .map_err(|e| {
                 Self::emit_error_event(&env, &caller, symbol_short!("split"), e as u32, timestamp);

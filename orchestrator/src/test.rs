@@ -519,4 +519,279 @@ mod tests {
 
         assert_eq!(log.len(), 0);
     }
+
+    // ============================================================================
+    // Address Validation Tests
+    // ============================================================================
+
+    #[test]
+    fn test_execute_savings_deposit_self_reference_fails() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let orchestrator_id = env.register_contract(None, Orchestrator);
+        let savings_id = env.register_contract(None, MockSavingsGoals);
+        let user = generate_test_address(&env);
+
+        let client = OrchestratorClient::new(&env, &orchestrator_id);
+
+        let result =
+            client.try_execute_savings_deposit(&user, &5000, &orchestrator_id, &savings_id, &1);
+
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().unwrap(),
+            OrchestratorError::SelfReferenceNotAllowed
+        );
+    }
+
+    #[test]
+    fn test_execute_savings_deposit_duplicate_addresses_fails() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let orchestrator_id = env.register_contract(None, Orchestrator);
+        let family_wallet_id = env.register_contract(None, MockFamilyWallet);
+        let user = generate_test_address(&env);
+
+        let client = OrchestratorClient::new(&env, &orchestrator_id);
+
+        let result = client.try_execute_savings_deposit(
+            &user,
+            &5000,
+            &family_wallet_id,
+            &family_wallet_id,
+            &1,
+        );
+
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().unwrap(),
+            OrchestratorError::DuplicateContractAddress
+        );
+    }
+
+    #[test]
+    fn test_execute_bill_payment_self_reference_fails() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let orchestrator_id = env.register_contract(None, Orchestrator);
+        let family_wallet_id = env.register_contract(None, MockFamilyWallet);
+        let user = generate_test_address(&env);
+
+        let client = OrchestratorClient::new(&env, &orchestrator_id);
+
+        let result =
+            client.try_execute_bill_payment(&user, &3000, &family_wallet_id, &orchestrator_id, &1);
+
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().unwrap(),
+            OrchestratorError::SelfReferenceNotAllowed
+        );
+    }
+
+    #[test]
+    fn test_execute_bill_payment_duplicate_addresses_fails() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let orchestrator_id = env.register_contract(None, Orchestrator);
+        let bills_id = env.register_contract(None, MockBillPayments);
+        let user = generate_test_address(&env);
+
+        let client = OrchestratorClient::new(&env, &orchestrator_id);
+
+        let result = client.try_execute_bill_payment(&user, &3000, &bills_id, &bills_id, &1);
+
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().unwrap(),
+            OrchestratorError::DuplicateContractAddress
+        );
+    }
+
+    #[test]
+    fn test_execute_insurance_payment_self_reference_fails() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let orchestrator_id = env.register_contract(None, Orchestrator);
+        let family_wallet_id = env.register_contract(None, MockFamilyWallet);
+        let user = generate_test_address(&env);
+
+        let client = OrchestratorClient::new(&env, &orchestrator_id);
+
+        let result = client.try_execute_insurance_payment(
+            &user,
+            &2000,
+            &family_wallet_id,
+            &orchestrator_id,
+            &1,
+        );
+
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().unwrap(),
+            OrchestratorError::SelfReferenceNotAllowed
+        );
+    }
+
+    #[test]
+    fn test_execute_insurance_payment_duplicate_addresses_fails() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let orchestrator_id = env.register_contract(None, Orchestrator);
+        let insurance_id = env.register_contract(None, MockInsurance);
+        let user = generate_test_address(&env);
+
+        let client = OrchestratorClient::new(&env, &orchestrator_id);
+
+        let result =
+            client.try_execute_insurance_payment(&user, &2000, &insurance_id, &insurance_id, &1);
+
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().unwrap(),
+            OrchestratorError::DuplicateContractAddress
+        );
+    }
+
+    #[test]
+    fn test_execute_remittance_flow_self_reference_fails() {
+        let (
+            env,
+            orchestrator_id,
+            family_wallet_id,
+            remittance_split_id,
+            savings_id,
+            bills_id,
+            _insurance_id,
+            user,
+        ) = setup_test_env();
+
+        let client = OrchestratorClient::new(&env, &orchestrator_id);
+
+        let result = client.try_execute_remittance_flow(
+            &user,
+            &10000,
+            &family_wallet_id,
+            &remittance_split_id,
+            &savings_id,
+            &bills_id,
+            &orchestrator_id,
+            &1,
+            &1,
+            &1,
+        );
+
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().unwrap(),
+            OrchestratorError::SelfReferenceNotAllowed
+        );
+    }
+
+    #[test]
+    fn test_execute_remittance_flow_duplicate_addresses_fails() {
+        let (
+            env,
+            orchestrator_id,
+            family_wallet_id,
+            remittance_split_id,
+            savings_id,
+            _bills_id,
+            insurance_id,
+            user,
+        ) = setup_test_env();
+
+        let client = OrchestratorClient::new(&env, &orchestrator_id);
+
+        let result = client.try_execute_remittance_flow(
+            &user,
+            &10000,
+            &family_wallet_id,
+            &remittance_split_id,
+            &savings_id,
+            &savings_id,
+            &insurance_id,
+            &1,
+            &1,
+            &1,
+        );
+
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().unwrap(),
+            OrchestratorError::DuplicateContractAddress
+        );
+    }
+
+    #[test]
+    fn test_execute_remittance_flow_family_wallet_duplicate_fails() {
+        let (
+            env,
+            orchestrator_id,
+            family_wallet_id,
+            _remittance_split_id,
+            savings_id,
+            bills_id,
+            insurance_id,
+            user,
+        ) = setup_test_env();
+
+        let client = OrchestratorClient::new(&env, &orchestrator_id);
+
+        let result = client.try_execute_remittance_flow(
+            &user,
+            &10000,
+            &family_wallet_id,
+            &family_wallet_id,
+            &savings_id,
+            &bills_id,
+            &insurance_id,
+            &1,
+            &1,
+            &1,
+        );
+
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().unwrap(),
+            OrchestratorError::DuplicateContractAddress
+        );
+    }
+
+    #[test]
+    fn test_execute_remittance_flow_all_same_address_fails() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let orchestrator_id = env.register_contract(None, Orchestrator);
+        let single_contract = env.register_contract(None, MockFamilyWallet);
+        let user = generate_test_address(&env);
+
+        let client = OrchestratorClient::new(&env, &orchestrator_id);
+
+        let result = client.try_execute_remittance_flow(
+            &user,
+            &10000,
+            &single_contract,
+            &single_contract,
+            &single_contract,
+            &single_contract,
+            &single_contract,
+            &1,
+            &1,
+            &1,
+        );
+
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().unwrap(),
+            OrchestratorError::DuplicateContractAddress
+        );
+    }
 }
