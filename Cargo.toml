@@ -31,7 +31,6 @@ default-members = [
     "data_migration",
     "reporting",
     "orchestrator",
-    "emergency_killswitch",
 ]
 resolver = "2"
 
