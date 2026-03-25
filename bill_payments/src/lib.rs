@@ -328,22 +328,66 @@ impl BillPayments {
     fn get_upgrade_admin(env: &Env) -> Option<Address> {
         env.storage().instance().get(&symbol_short!("UPG_ADM"))
     }
+    /// Set or transfer the upgrade admin role.
+    /// 
+    /// # Security Requirements
+    /// - If no upgrade admin exists, caller must equal new_admin (bootstrap pattern)
+    /// - If upgrade admin exists, only current upgrade admin can transfer
+    /// - Caller must be authenticated via require_auth()
+    /// 
+    /// # Parameters
+    /// - `caller`: The address attempting to set the upgrade admin
+    /// - `new_admin`: The address to become the new upgrade admin
+    /// 
+    /// # Returns
+    /// - `Ok(())` on successful admin transfer
+    /// - `Err(Error::Unauthorized)` if caller lacks permission
     pub fn set_upgrade_admin(env: Env, caller: Address, new_admin: Address) -> Result<(), Error> {
         caller.require_auth();
-        let current = Self::get_upgrade_admin(&env);
-        match current {
+        
+        let current_upgrade_admin = Self::get_upgrade_admin(&env);
+        
+        // Authorization logic:
+        // 1. If no upgrade admin exists, caller must equal new_admin (bootstrap)
+        // 2. If upgrade admin exists, only current upgrade admin can transfer
+        match current_upgrade_admin {
             None => {
+                // Bootstrap pattern - caller must be setting themselves as admin
                 if caller != new_admin {
                     return Err(Error::Unauthorized);
                 }
             }
-            Some(adm) if adm != caller => return Err(Error::Unauthorized),
-            _ => {}
+            Some(current_admin) => {
+                // Admin transfer - only current admin can transfer
+                if current_admin != caller {
+                    return Err(Error::Unauthorized);
+                }
+            }
         }
+        
         env.storage()
             .instance()
             .set(&symbol_short!("UPG_ADM"), &new_admin);
+        
+        // Emit admin transfer event for audit trail
+        RemitwiseEvents::emit(
+            &env,
+            EventCategory::System,
+            EventPriority::High,
+            symbol_short!("adm_xfr"),
+            (current_upgrade_admin, new_admin.clone()),
+        );
+        
         Ok(())
+    }
+
+    /// Get the current upgrade admin address.
+    /// 
+    /// # Returns
+    /// - `Some(Address)` if upgrade admin is set
+    /// - `None` if no upgrade admin has been configured
+    pub fn get_upgrade_admin_public(env: Env) -> Option<Address> {
+        Self::get_upgrade_admin(&env)
     }
     pub fn set_version(env: Env, caller: Address, new_version: u32) -> Result<(), Error> {
         caller.require_auth();

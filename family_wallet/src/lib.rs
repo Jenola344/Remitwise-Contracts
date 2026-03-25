@@ -1188,13 +1188,48 @@ impl FamilyWallet {
         env.storage().instance().get(&symbol_short!("UPG_ADM"))
     }
 
+    /// Set or transfer the upgrade admin role.
+    /// 
+    /// # Security Requirements
+    /// - Only wallet owners can set or transfer upgrade admin role
+    /// - Caller must be authenticated via require_auth()
+    /// - Caller must have at least Owner role in the family wallet
+    /// 
+    /// # Parameters
+    /// - `caller`: The address attempting to set the upgrade admin
+    /// - `new_admin`: The address to become the new upgrade admin
+    /// 
+    /// # Returns
+    /// - `true` on successful admin transfer
+    /// 
+    /// # Panics
+    /// - If caller lacks Owner role or higher
     pub fn set_upgrade_admin(env: Env, caller: Address, new_admin: Address) -> bool {
         caller.require_auth();
         Self::require_role_at_least(&env, &caller, FamilyRole::Owner);
+        
+        let current_upgrade_admin = Self::get_upgrade_admin(&env);
+        
         env.storage()
             .instance()
             .set(&symbol_short!("UPG_ADM"), &new_admin);
+        
+        // Emit admin transfer event for audit trail
+        env.events().publish(
+            (symbol_short!("family"), symbol_short!("adm_xfr")),
+            (current_upgrade_admin, new_admin.clone()),
+        );
+        
         true
+    }
+
+    /// Get the current upgrade admin address.
+    /// 
+    /// # Returns
+    /// - `Some(Address)` if upgrade admin is set
+    /// - `None` if no upgrade admin has been configured
+    pub fn get_upgrade_admin_public(env: Env) -> Option<Address> {
+        Self::get_upgrade_admin(&env)
     }
 
     pub fn set_version(env: Env, caller: Address, new_version: u32) -> bool {

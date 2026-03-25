@@ -239,24 +239,74 @@ impl RemittanceSplit {
     fn get_upgrade_admin(env: &Env) -> Option<Address> {
         env.storage().instance().get(&symbol_short!("UPG_ADM"))
     }
+    /// Set or transfer the upgrade admin role.
+    /// 
+    /// # Security Requirements
+    /// - If no upgrade admin exists, only the contract owner can set the initial admin
+    /// - If upgrade admin exists, only the current upgrade admin can transfer to a new admin
+    /// - Caller must be authenticated via require_auth()
+    /// 
+    /// # Parameters
+    /// - `caller`: The address attempting to set the upgrade admin
+    /// - `new_admin`: The address to become the new upgrade admin
+    /// 
+    /// # Returns
+    /// - `Ok(())` on successful admin transfer
+    /// - `Err(RemittanceSplitError::Unauthorized)` if caller lacks permission
+    /// - `Err(RemittanceSplitError::NotInitialized)` if contract not initialized
     pub fn set_upgrade_admin(
         env: Env,
         caller: Address,
         new_admin: Address,
     ) -> Result<(), RemittanceSplitError> {
         caller.require_auth();
+        
         let config: SplitConfig = env
             .storage()
             .instance()
             .get(&symbol_short!("CONFIG"))
             .ok_or(RemittanceSplitError::NotInitialized)?;
-        if config.owner != caller {
-            return Err(RemittanceSplitError::Unauthorized);
+        
+        let current_upgrade_admin = Self::get_upgrade_admin(&env);
+        
+        // Authorization logic:
+        // 1. If no upgrade admin exists, only contract owner can set initial admin
+        // 2. If upgrade admin exists, only current upgrade admin can transfer
+        match current_upgrade_admin {
+            None => {
+                // Initial admin setup - only owner can set
+                if config.owner != caller {
+                    return Err(RemittanceSplitError::Unauthorized);
+                }
+            }
+            Some(current_admin) => {
+                // Admin transfer - only current admin can transfer
+                if current_admin != caller {
+                    return Err(RemittanceSplitError::Unauthorized);
+                }
+            }
         }
+        
         env.storage()
             .instance()
             .set(&symbol_short!("UPG_ADM"), &new_admin);
+        
+        // Emit admin transfer event for audit trail
+        env.events().publish(
+            (symbol_short!("split"), symbol_short!("adm_xfr")),
+            (current_upgrade_admin, new_admin.clone()),
+        );
+        
         Ok(())
+    }
+
+    /// Get the current upgrade admin address.
+    /// 
+    /// # Returns
+    /// - `Some(Address)` if upgrade admin is set
+    /// - `None` if no upgrade admin has been configured
+    pub fn get_upgrade_admin_public(env: Env) -> Option<Address> {
+        Self::get_upgrade_admin(&env)
     }
     pub fn set_version(
         env: Env,
