@@ -5,10 +5,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-soroban-sdk = "21.0.0"
+soroban-sdk = "=21.7.7"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
-
-[dev-dependencies]
-soroban-sdk = { version = "21.0.0", features = ["testutils"] }

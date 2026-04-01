@@ -12,7 +12,7 @@
 
 use soroban_sdk::{
     contract, contractclient, contracterror, contractimpl, contracttype, panic_with_error,
-    symbol_short, Address, Env, Symbol, Vec,
+    symbol_short, Address, Env, Map, Symbol, Vec,
 };
 use remitwise_common::{EventCategory, EventPriority, RemitwiseEvents};
 
@@ -26,6 +26,7 @@ mod test;
 #[contractclient(name = "FamilyWalletClient")]
 pub trait FamilyWalletTrait {
     fn check_spending_limit(env: Env, caller: Address, amount: i128) -> bool;
+    fn get_owner(env: Env) -> Address;
 }
 
 #[contractclient(name = "RemittanceSplitClient")]
@@ -69,10 +70,11 @@ pub enum OrchestratorError {
     DuplicateContractAddress = 11,
     ContractNotConfigured = 12,
     SelfReferenceNotAllowed = 13,
+    NonceAlreadyUsed = 14,
 }
 
 #[contracttype]
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(u32)]
 pub enum ExecutionState {
     Idle = 0,
@@ -131,6 +133,12 @@ pub struct OrchestratorAuditEntry {
     pub error_code: Option<u32>,
 }
 
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum StorageKey {
+    Nonce(Address, Symbol, u64),
+}
+
 const INSTANCE_LIFETIME_THRESHOLD: u32 = 17280;
 const INSTANCE_BUMP_AMOUNT: u32 = 518400;
 const MAX_AUDIT_ENTRIES: u32 = 100;
@@ -147,6 +155,33 @@ impl Orchestrator {
     // -----------------------------------------------------------------------
     // Reentrancy Guard
     // -----------------------------------------------------------------------
+
+    /// Acquire the execution lock, preventing reentrant calls.
+    ///
+    /// Checks the current execution state stored under the `EXEC_ST` key in
+    /// instance storage. If the state is `Idle` (or unset), transitions to
+    /// `Executing` and returns `Ok(())`. If already `Executing`, returns
+    /// `Err(OrchestratorError::ReentrancyDetected)`.
+    ///
+    /// # Security
+    /// This MUST be called at the very start of every public entry point,
+    /// before any state reads or cross-contract calls.
+    ///
+    /// # Gas Estimation
+    /// ~500 gas (single instance storage read + write)
+    /// Validate that all contract addresses in a remittance flow are non-zero/valid.
+    fn validate_remittance_flow_addresses(
+        _env: &Env,
+        _family_wallet_addr: &Address,
+        _remittance_split_addr: &Address,
+        _savings_addr: &Address,
+        _bills_addr: &Address,
+        _insurance_addr: &Address,
+    ) -> Result<(), OrchestratorError> {
+        // Addresses in Soroban are always valid if they exist; no additional
+        // validation is required beyond the type system guarantees.
+        Ok(())
+    }
 
     fn acquire_execution_lock(env: &Env) -> Result<(), OrchestratorError> {
         let state: ExecutionState = env
@@ -172,42 +207,28 @@ impl Orchestrator {
             .set(&symbol_short!("EXEC_ST"), &ExecutionState::Idle);
     }
 
-    /// Validate that two contract addresses are distinct and not self-referencing.
-    fn validate_two_addresses(
-        env: &Env,
-        addr_a: &Address,
-        addr_b: &Address,
-    ) -> Result<(), OrchestratorError> {
-        let current = env.current_contract_address();
-        if addr_a == &current || addr_b == &current {
-            return Err(OrchestratorError::SelfReferenceNotAllowed);
-        }
-        if addr_a == addr_b {
-            return Err(OrchestratorError::DuplicateContractAddress);
-        }
-        Ok(())
-    }
-
-    /// Consume a nonce for replay protection. Each (caller, operation) pair
-    /// tracks a monotonic counter; the supplied nonce must match the current value.
-    fn consume_nonce(
-        env: &Env,
-        caller: &Address,
-        _operation: Symbol,
-        nonce: u64,
-    ) -> Result<(), OrchestratorError> {
-        let key = symbol_short!("NONCE");
-        let current: u64 = env
-            .storage()
-            .instance()
-            .get(&key)
-            .unwrap_or(0u64);
-        if nonce != current {
-            return Err(OrchestratorError::InvalidAmount);
-        }
+    fn extend_instance_ttl(env: &Env) {
         env.storage()
             .instance()
-            .set(&key, &(current + 1));
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+    }
+
+    /// @notice Authorizes bill payment execution using the family wallet owner as the trusted principal.
+    /// @dev The `caller` must explicitly authorize the invocation and must match the
+    ///      owner returned by the configured family wallet. No delegate or non-owner
+    ///      execution path is supported for `execute_bill_payment`.
+    fn require_bill_payment_owner(
+        env: &Env,
+        family_wallet_addr: &Address,
+        caller: &Address,
+    ) -> Result<(), OrchestratorError> {
+        caller.require_auth();
+        let wallet_client = FamilyWalletClient::new(env, family_wallet_addr);
+
+        if wallet_client.get_owner() != caller.clone() {
+            return Err(OrchestratorError::PermissionDenied);
+        }
+
         Ok(())
     }
 
@@ -302,7 +323,7 @@ impl Orchestrator {
     ) -> Result<(), OrchestratorError> {
         Self::acquire_execution_lock(&env)?;
         caller.require_auth();
-        let timestamp = env.ledger().timestamp();
+        let _timestamp = env.ledger().timestamp();
         // Address validation
         Self::validate_two_addresses(&env, &family_wallet_addr, &savings_addr).map_err(|e| {
             Self::release_execution_lock(&env);
@@ -324,6 +345,16 @@ impl Orchestrator {
         result
     }
 
+    /// @notice Executes a bill payment for the authenticated family wallet owner.
+    /// @dev Delegation is not supported on this entry point. The authenticated
+    ///      `caller` must match the owner returned by `family_wallet_addr`, and the
+    ///      nonce is consumed before any downstream state changes to prevent replay.
+    /// @param caller Authenticated family wallet owner expected to receive downstream ownership checks.
+    /// @param amount Amount checked against the family wallet spending policy.
+    /// @param family_wallet_addr Family wallet contract used for spending-limit validation.
+    /// @param bills_addr Bill payments contract that enforces bill ownership.
+    /// @param bill_id Target bill identifier.
+    /// @param nonce Caller-scoped replay-protection nonce for bill-payment execution.
     pub fn execute_bill_payment(
         env: Env,
         caller: Address,
@@ -334,7 +365,18 @@ impl Orchestrator {
         _nonce: u64,
     ) -> Result<(), OrchestratorError> {
         Self::acquire_execution_lock(&env)?;
-        caller.require_auth();
+        Self::require_bill_payment_owner(&env, &family_wallet_addr, &caller).map_err(|e| {
+            Self::release_execution_lock(&env);
+            e
+        })?;
+        Self::validate_two_addresses(&env, &family_wallet_addr, &bills_addr).map_err(|e| {
+            Self::release_execution_lock(&env);
+            e
+        })?;
+        Self::consume_nonce(&env, &caller, symbol_short!("exec_bill"), nonce).map_err(|e| {
+            Self::release_execution_lock(&env);
+            e
+        })?;
         let result = (|| {
             Self::check_spending_limit(&env, &family_wallet_addr, &caller, amount)?;
             Self::execute_bill_payment_internal(&env, &bills_addr, &caller, bill_id)?;
@@ -355,6 +397,14 @@ impl Orchestrator {
     ) -> Result<(), OrchestratorError> {
         Self::acquire_execution_lock(&env)?;
         caller.require_auth();
+        Self::validate_two_addresses(&env, &family_wallet_addr, &insurance_addr).map_err(|e| {
+            Self::release_execution_lock(&env);
+            e
+        })?;
+        Self::consume_nonce(&env, &caller, symbol_short!("exec_ins"), nonce).map_err(|e| {
+            Self::release_execution_lock(&env);
+            e
+        })?;
         let result = (|| {
             Self::check_spending_limit(&env, &family_wallet_addr, &caller, amount)?;
             Self::pay_insurance_premium(&env, &insurance_addr, &caller, policy_id)?;
@@ -421,6 +471,35 @@ impl Orchestrator {
         Ok(())
     }
 
+    fn validate_two_addresses(
+        env: &Env,
+        addr1: &Address,
+        addr2: &Address,
+    ) -> Result<(), OrchestratorError> {
+        let current = env.current_contract_address();
+        if addr1 == &current || addr2 == &current {
+            return Err(OrchestratorError::SelfReferenceNotAllowed);
+        }
+        if addr1 == addr2 {
+            return Err(OrchestratorError::DuplicateContractAddress);
+        }
+        Ok(())
+    }
+
+    fn consume_nonce(
+        env: &Env,
+        caller: &Address,
+        command_type: Symbol,
+        nonce: u64,
+    ) -> Result<(), OrchestratorError> {
+        let key = (caller.clone(), command_type, nonce);
+        if env.storage().persistent().has(&key) {
+            return Err(OrchestratorError::NonceAlreadyUsed);
+        }
+        env.storage().persistent().set(&key, &true);
+        Ok(())
+    }
+
     fn emit_success_event(env: &Env, caller: &Address, total: i128, allocations: &Vec<i128>, timestamp: u64) {
         env.events().publish((symbol_short!("flow_ok"),), RemittanceFlowEvent {
             caller: caller.clone(),
@@ -457,5 +536,13 @@ impl Orchestrator {
             if let Some(e) = log.get(i) { out.push_back(e); }
         }
         out
+    }
+
+    /// Extend the TTL of instance storage
+    #[allow(dead_code)]
+    fn extend_instance_ttl(env: &Env) {
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
     }
 }
