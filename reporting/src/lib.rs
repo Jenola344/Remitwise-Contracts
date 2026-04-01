@@ -512,7 +512,7 @@ impl ReportingContract {
             return RemittanceSummary {
                 total_received: total_amount,
                 total_allocated: total_amount,
-                category_breakdown: Vec::new(&env),
+                category_breakdown: Vec::new(env),
                 period_start,
                 period_end,
                 data_availability: DataAvailability::Missing,
@@ -522,6 +522,7 @@ impl ReportingContract {
         let addresses = addresses.unwrap();
         let availability = DataAvailability::Complete;
 
+        let addresses = addresses.unwrap();
         let split_client = RemittanceSplitClient::new(env, &addresses.remittance_split);
         let mut availability = DataAvailability::Complete;
 

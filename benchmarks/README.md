@@ -38,6 +38,9 @@ RUST_TEST_THREADS=1 cargo test -p remittance_split --test gas_bench -- --nocaptu
 
 # Run bill_payments benchmarks
 RUST_TEST_THREADS=1 cargo test -p bill_payments --test gas_bench -- --nocapture
+
+# Run reporting aggregation benchmarks
+RUST_TEST_THREADS=1 cargo test -p reporting --test gas_bench -- --nocapture
 ```
 
 ### All Benchmarks
@@ -95,6 +98,59 @@ The system automatically detects regressions by comparing current measurements a
 - **Green**: Within threshold (no action needed)
 - **Yellow**: Exceeds threshold but < 25% increase (review recommended)  
 - **Red**: > 25% increase (investigation required)
+
+## Reporting Aggregation Benchmarks
+
+The reporting contract benchmarks cover the three heavy aggregation paths
+identified in issue #317, each run at three data sizes (small/medium/large)
+to expose O(n) complexity growth.
+
+### get_remittance_summary
+
+| Scenario | Description |
+|----------|-------------|
+| `no_addresses_baseline` | Addresses not configured – O(1) storage miss, returns Missing |
+| `with_split_4_categories` | Two cross-contract calls + four-category breakdown loop |
+
+### get_trend_analysis_multi
+
+| Scenario | Items | Windows |
+|----------|-------|---------|
+| `5_periods` | 5 | 4 |
+| `25_periods` | 25 | 24 |
+| `50_periods` | 50 | 49 |
+
+Pure in-contract computation; no cross-contract calls.  Scales linearly with
+history length.
+
+### get_financial_health_report
+
+| Scenario | Goals | Bills | Policies |
+|----------|-------|-------|---------|
+| `small_5_items` | 5 | 5 | 5 |
+| `medium_25_items` | 25 | 25 | 25 |
+| `large_50_items` | 50 | 50 | 50 |
+
+Issues **nine** cross-contract calls per invocation:
+`get_all_goals` ×2, `get_unpaid_bills` ×1, `get_active_policies` ×2,
+`get_split` ×1, `calculate_split` ×1, `get_all_bills_for_owner` ×1,
+`get_total_monthly_premium` ×1.
+
+### archive_old_reports
+
+| Scenario | Stored reports |
+|----------|---------------|
+| `5_stored_reports` | 5 |
+| `25_stored_reports` | 25 |
+| `50_stored_reports` | 50 |
+
+Dual O(n) map iteration: first over `REPORTS` to find candidates, then over
+`to_remove` to delete them.
+
+### get_storage_stats
+
+`after_25_archived` – O(1) single instance-storage key read.  Used to confirm
+the stats endpoint stays flat regardless of archive depth.
 
 ## Adding New Benchmarks
 
