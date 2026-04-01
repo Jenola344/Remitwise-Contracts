@@ -217,7 +217,7 @@ pub struct SpendingTracker {
 
 /// Precision spending guardrail configuration for member withdrawals.
 #[contracttype]
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct PrecisionSpendingLimit {
     /// Maximum cumulative spending allowed per daily period.
     pub limit: i128,
