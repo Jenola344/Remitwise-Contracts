@@ -87,7 +87,7 @@ pub struct SavingsSchedule {
     pub missed_count: u32,
 }
 
-#[contracttype]
+#[contracterror]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SavingsGoalsError {
     InvalidAmount = 1,
@@ -96,49 +96,6 @@ pub enum SavingsGoalsError {
     GoalLocked = 4,
     InsufficientBalance = 5,
     Overflow = 6,
-}
-
-impl From<SavingsGoalsError> for soroban_sdk::Error {
-    fn from(err: SavingsGoalsError) -> Self {
-        match err {
-            SavingsGoalsError::InvalidAmount => soroban_sdk::Error::from((
-                soroban_sdk::xdr::ScErrorType::Contract,
-                soroban_sdk::xdr::ScErrorCode::InvalidInput,
-            )),
-            SavingsGoalsError::GoalNotFound => soroban_sdk::Error::from((
-                soroban_sdk::xdr::ScErrorType::Contract,
-                soroban_sdk::xdr::ScErrorCode::MissingValue,
-            )),
-            SavingsGoalsError::Unauthorized => soroban_sdk::Error::from((
-                soroban_sdk::xdr::ScErrorType::Contract,
-                soroban_sdk::xdr::ScErrorCode::InvalidAction,
-            )),
-            SavingsGoalsError::GoalLocked => soroban_sdk::Error::from((
-                soroban_sdk::xdr::ScErrorType::Contract,
-                soroban_sdk::xdr::ScErrorCode::InvalidAction,
-            )),
-            SavingsGoalsError::InsufficientBalance => soroban_sdk::Error::from((
-                soroban_sdk::xdr::ScErrorType::Contract,
-                soroban_sdk::xdr::ScErrorCode::InvalidInput,
-            )),
-            SavingsGoalsError::Overflow => soroban_sdk::Error::from((
-                soroban_sdk::xdr::ScErrorType::Contract,
-                soroban_sdk::xdr::ScErrorCode::InvalidInput,
-            )),
-        }
-    }
-}
-
-impl From<&SavingsGoalsError> for soroban_sdk::Error {
-    fn from(err: &SavingsGoalsError) -> Self {
-        (*err).into()
-    }
-}
-
-impl From<soroban_sdk::Error> for SavingsGoalsError {
-    fn from(_err: soroban_sdk::Error) -> Self {
-        SavingsGoalsError::Unauthorized
-    }
 }
 
 #[contracttype]
@@ -773,7 +730,7 @@ impl SavingsGoalContract {
         // Access control: verify caller is the owner
         if goal.owner != caller {
             Self::append_audit(&env, symbol_short!("add"), &caller, false);
-            panic!("Only the goal owner can add funds");
+            return Err(SavingsGoalsError::Unauthorized);
         }
 
         goal.current_amount = goal
@@ -865,10 +822,10 @@ impl SavingsGoalContract {
             if goal.owner != caller {
                 return Err(SavingsGoalsError::Unauthorized);
             }
-            goal.current_amount = match goal.current_amount.checked_add(item.amount) {
-                Some(v) => v,
-                None => panic!("overflow"),
-            };
+            goal.current_amount = goal
+                .current_amount
+                .checked_add(item.amount)
+                .ok_or(SavingsGoalsError::Overflow)?;
             let new_total = goal.current_amount;
             let was_completed = new_total >= goal.target_amount;
             let previously_completed = (new_total - item.amount) >= goal.target_amount;

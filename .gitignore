@@ -14,6 +14,7 @@ Makefile
 # Proptest snapshot files
 **/test_snapshots/
 **/test_snapshots/**/*.rs
+**/test_snapshots/**/*.json
 
 # Documentation files
 !docs/adr-admin-role.md
