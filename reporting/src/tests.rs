@@ -548,7 +548,6 @@ fn test_get_remittance_summary_partial_data_remote_failure_propagates() {
     let client = ReportingContractClient::new(&env, &contract_id);
     let admin = soroban_sdk::Address::generate(&env);
     let user = soroban_sdk::Address::generate(&env);
-
     client.init(&admin);
 
     // Register FAILING mock contract
@@ -603,7 +602,6 @@ fn test_get_savings_report() {
 
     let period_start = 1704067200u64;
     let period_end = 1706745600u64;
-
     let report = client.get_savings_report(&user, &period_start, &period_end);
 
     assert_eq!(report.total_goals, 2);

@@ -234,7 +234,6 @@ pub trait FamilyWalletTrait {
 }
 
 // Data structures from other contracts (needed for client traits)
-
 #[contracttype]
 #[derive(Clone)]
 pub struct SavingsGoal {
@@ -480,6 +479,7 @@ impl ReportingContract {
     ///
     /// # Panics
     /// * If `caller` does not authorize the transaction
+    
     pub fn configure_addresses(
         env: Env,
         caller: Address,
