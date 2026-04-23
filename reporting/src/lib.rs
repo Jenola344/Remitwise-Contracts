@@ -1,8 +1,8 @@
 #![no_std]
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used))]
 use soroban_sdk::{
-    contract, contractclient, contracterror, contractimpl, contracttype, symbol_short, Address, Env,
-    Map, Vec,
+    contract, contractclient, contracterror, contractimpl, contracttype, symbol_short, Address,
+    Env, Map, Vec,
 };
 
 use remitwise_common::Category;
@@ -522,20 +522,17 @@ impl ReportingContract {
         period_end: u64,
     ) -> RemittanceSummary {
         user.require_auth();
-        Self::get_remittance_summary_internal(&env, user.clone(), total_amount, period_start, period_end)
+        Self::get_remittance_summary_internal(&env, total_amount, period_start, period_end)
     }
 
     fn get_remittance_summary_internal(
         env: &Env,
-        user: Address,
         total_amount: i128,
         period_start: u64,
         period_end: u64,
     ) -> RemittanceSummary {
-        let addresses: Option<ContractAddresses> = env
-            .storage()
-            .instance()
-            .get(&symbol_short!("ADDRS"));
+        let addresses: Option<ContractAddresses> =
+            env.storage().instance().get(&symbol_short!("ADDRS"));
 
         if addresses.is_none() {
             return RemittanceSummary {
@@ -870,7 +867,7 @@ impl ReportingContract {
         let health_score =
             Self::calculate_health_score_internal(&env, user.clone(), total_remittance);
         let remittance_summary =
-            Self::get_remittance_summary_internal(&env, user.clone(), total_remittance, period_start, period_end);
+            Self::get_remittance_summary_internal(&env, total_remittance, period_start, period_end);
         let savings_report =
             Self::get_savings_report_internal(&env, user.clone(), period_start, period_end);
         let bill_compliance =

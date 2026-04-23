@@ -316,8 +316,7 @@ macro_rules! setup_reporting {
      $bills_mod:ident :: $bills_struct:ident,
      $insurance_mod:ident :: $insurance_struct:ident
     ) => {{
-        let remittance_id =
-            $env.register_contract(None, $remittance_mod::$remittance_struct);
+        let remittance_id = $env.register_contract(None, $remittance_mod::$remittance_struct);
         let savings_id = $env.register_contract(None, $savings_mod::$savings_struct);
         let bills_id = $env.register_contract(None, $bills_mod::$bills_struct);
         let insurance_id = $env.register_contract(None, $insurance_mod::$insurance_struct);
@@ -439,9 +438,7 @@ fn bench_trend_analysis_multi_5_periods() {
 
     let history = make_history(&env, &user, 5);
 
-    let (cpu, mem, trends) = measure(&env, || {
-        client.get_trend_analysis_multi(&user, &history)
-    });
+    let (cpu, mem, trends) = measure(&env, || client.get_trend_analysis_multi(&user, &history));
 
     // 5 data points → 4 trend windows
     assert_eq!(trends.len(), 4);
@@ -472,9 +469,7 @@ fn bench_trend_analysis_multi_25_periods() {
 
     let history = make_history(&env, &user, 25);
 
-    let (cpu, mem, trends) = measure(&env, || {
-        client.get_trend_analysis_multi(&user, &history)
-    });
+    let (cpu, mem, trends) = measure(&env, || client.get_trend_analysis_multi(&user, &history));
 
     assert_eq!(trends.len(), 24);
 
@@ -500,9 +495,7 @@ fn bench_trend_analysis_multi_50_periods() {
 
     let history = make_history(&env, &user, 50);
 
-    let (cpu, mem, trends) = measure(&env, || {
-        client.get_trend_analysis_multi(&user, &history)
-    });
+    let (cpu, mem, trends) = measure(&env, || client.get_trend_analysis_multi(&user, &history));
 
     assert_eq!(trends.len(), 49);
 
@@ -643,7 +636,13 @@ fn store_n_reports(
 ) {
     // Re-configure with the provided addresses so we can generate real reports.
     // (They were already configured; this is a no-op if unchanged.)
-    let _ = (savings_id, bills_id, insurance_id, remittance_id, family_dummy);
+    let _ = (
+        savings_id,
+        bills_id,
+        insurance_id,
+        remittance_id,
+        family_dummy,
+    );
 
     for i in 0u32..n {
         let user = Address::generate(env);

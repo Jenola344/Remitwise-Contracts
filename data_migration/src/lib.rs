@@ -322,10 +322,16 @@ impl std::fmt::Display for MigrationError {
                 )
             }
             MigrationError::ChecksumMismatch => {
-                write!(f, "checksum mismatch: snapshot integrity could not be verified")
+                write!(
+                    f,
+                    "checksum mismatch: snapshot integrity could not be verified"
+                )
             }
             MigrationError::UnknownHashAlgorithm => {
-                write!(f, "unknown hash algorithm: cannot verify snapshot integrity")
+                write!(
+                    f,
+                    "unknown hash algorithm: cannot verify snapshot integrity"
+                )
             }
             MigrationError::PayloadTooLarge { size, max } => {
                 write!(f, "payload too large: {} bytes (max {})", size, max)
@@ -392,8 +398,8 @@ pub fn export_to_json(snapshot: &ExportSnapshot) -> Result<Vec<u8>, MigrationErr
 /// Export snapshot to binary bytes.
 pub fn export_to_binary(snapshot: &ExportSnapshot) -> Result<Vec<u8>, MigrationError> {
     snapshot.validate_payload_constraints()?;
-    let bytes =
-        bincode::serialize(snapshot).map_err(|e| MigrationError::DeserializeError(e.to_string()))?;
+    let bytes = bincode::serialize(snapshot)
+        .map_err(|e| MigrationError::DeserializeError(e.to_string()))?;
     validate_snapshot_size(bytes.len())?;
     Ok(bytes)
 }
@@ -456,9 +462,11 @@ pub fn export_to_encrypted_payload(plain_bytes: &[u8]) -> Result<String, Migrati
 pub fn import_from_encrypted_payload(encoded: &str) -> Result<Vec<u8>, MigrationError> {
     validate_encrypted_payload_size(encoded.len())?;
 
-    let rest = encoded.strip_prefix(ENCRYPTED_PAYLOAD_PREFIX_V1).ok_or_else(|| {
-        MigrationError::InvalidFormat("missing or invalid encrypted payload marker".into())
-    })?;
+    let rest = encoded
+        .strip_prefix(ENCRYPTED_PAYLOAD_PREFIX_V1)
+        .ok_or_else(|| {
+            MigrationError::InvalidFormat("missing or invalid encrypted payload marker".into())
+        })?;
 
     if rest.is_empty() {
         return Err(MigrationError::InvalidFormat(
@@ -949,14 +957,12 @@ mod tests {
         assert!(MigrationError::UnknownHashAlgorithm
             .to_string()
             .contains("unknown hash algorithm"));
-        assert!(
-            MigrationError::IncompatibleVersion {
-                found: 5,
-                min: 1,
-                max: 2,
-            }
-            .to_string()
-            .contains("5")
-        );
+        assert!(MigrationError::IncompatibleVersion {
+            found: 5,
+            min: 1,
+            max: 2,
+        }
+        .to_string()
+        .contains("5"));
     }
 }

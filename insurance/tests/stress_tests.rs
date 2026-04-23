@@ -142,7 +142,9 @@ fn stress_policies_across_10_users() {
                 &name,
                 &CoverageType::Health,
                 &PREMIUM_PER_POLICY,
-                &50_000i128, &None);
+                &50_000i128,
+                &None,
+            );
         }
     }
 
@@ -231,7 +233,9 @@ fn stress_ttl_re_bumped_by_pay_premium_after_ledger_advancement() {
         &String::from_str(&env, "PayTTL"),
         &CoverageType::Health,
         &200i128,
-        &20_000i128, &None);
+        &20_000i128,
+        &None,
+    );
 
     // Advance ledger so TTL drops below threshold
     env.ledger().set(LedgerInfo {
@@ -289,7 +293,11 @@ fn stress_batch_pay_premiums_at_max_batch_size() {
     let expected_next = 1_700_000_000u64 + (30 * 86400);
     for &id in &policy_ids {
         let policy = client.get_policy(&id).unwrap();
-        assert!(policy.active, "Policy {} must still be active after batch premium payment", id);
+        assert!(
+            policy.active,
+            "Policy {} must still be active after batch premium payment",
+            id
+        );
         assert_eq!(
             policy.next_payment_date, expected_next,
             "Policy {} next_payment_date must equal current_time + 30 days after batch pay",
@@ -435,16 +443,18 @@ fn stress_batch_pay_mixed_states() {
 
     let name = String::from_str(&env, "MixedBatch");
     let coverage_type = CoverageType::Health;
-    
+
     let mut policy_ids = std::vec![];
     for i in 0..50 {
         if i % 2 == 0 {
             // Valid policy
-            let id = client.create_policy(&owner, &name, &coverage_type, &100i128, &10_000i128, &None);
+            let id =
+                client.create_policy(&owner, &name, &coverage_type, &100i128, &10_000i128, &None);
             policy_ids.push(id);
         } else {
             // Invalid policy: deactivated
-            let id = client.create_policy(&owner, &name, &coverage_type, &100i128, &10_000i128, &None);
+            let id =
+                client.create_policy(&owner, &name, &coverage_type, &100i128, &10_000i128, &None);
             client.deactivate_policy(&owner, &id);
             policy_ids.push(id);
         }

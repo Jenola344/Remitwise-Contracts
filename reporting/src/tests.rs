@@ -338,14 +338,8 @@ fn test_configure_addresses_rejects_self_reference() {
     let bills = Address::generate(&env);
     let insurance = Address::generate(&env);
 
-    let result = client.try_configure_addresses(
-        &admin,
-        &split,
-        &savings,
-        &bills,
-        &insurance,
-        &contract_id,
-    );
+    let result =
+        client.try_configure_addresses(&admin, &split, &savings, &bills, &insurance, &contract_id);
     assert!(matches!(
         result,
         Err(Ok(ReportingError::InvalidDependencyAddressConfiguration))
@@ -483,7 +477,7 @@ fn test_get_remittance_summary_missing_addresses() {
     let user = soroban_sdk::Address::generate(&env);
 
     // Purposefully DO NOT call client.init() or client.configure_addresses()
-    
+
     let total_amount = 10000i128;
     let period_start = 1704067200u64;
     let period_end = 1706745600u64;
@@ -522,7 +516,8 @@ fn test_get_remittance_summary_partial_data_remote_failure_propagates() {
     client.init(&admin);
 
     // Register FAILING mock contract
-    let failing_split_id = env.register_contract(None, failing_remittance_split::FailingRemittanceSplit);
+    let failing_split_id =
+        env.register_contract(None, failing_remittance_split::FailingRemittanceSplit);
     let savings_goals_id = env.register_contract(None, savings_goals::SavingsGoalsContract);
     let bill_payments_id = env.register_contract(None, bill_payments::BillPayments);
     let insurance_id = env.register_contract(None, insurance::Insurance);

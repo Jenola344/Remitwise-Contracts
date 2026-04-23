@@ -79,7 +79,16 @@ fn stress_200_bills_single_user() {
     let due_date = 2_000_000_000u64; // far future
 
     for _ in 0..200 {
-        client.create_bill(&owner, &name, &100i128, &due_date, &false, &0u32, &None, &String::from_str(&env, "XLM"));
+        client.create_bill(
+            &owner,
+            &name,
+            &100i128,
+            &due_date,
+            &false,
+            &0u32,
+            &None,
+            &String::from_str(&env, "XLM"),
+        );
     }
 
     // Verify aggregate total
@@ -126,7 +135,16 @@ fn stress_instance_ttl_valid_after_200_bills() {
     let due_date = 2_000_000_000u64;
 
     for _ in 0..200 {
-        client.create_bill(&owner, &name, &100i128, &due_date, &false, &0u32, &None, &String::from_str(&env, "XLM"));
+        client.create_bill(
+            &owner,
+            &name,
+            &100i128,
+            &due_date,
+            &false,
+            &0u32,
+            &None,
+            &String::from_str(&env, "XLM"),
+        );
     }
 
     let ttl = env.as_contract(&contract_id, || env.storage().instance().get_ttl());
@@ -159,7 +177,16 @@ fn stress_bills_across_10_users() {
 
     for user in &users {
         for _ in 0..BILLS_PER_USER {
-            client.create_bill(user, &name, &AMOUNT_PER_BILL, &due_date, &false, &0u32, &None, &String::from_str(&env, "XLM"));
+            client.create_bill(
+                user,
+                &name,
+                &AMOUNT_PER_BILL,
+                &due_date,
+                &false,
+                &0u32,
+                &None,
+                &String::from_str(&env, "XLM"),
+            );
         }
     }
 
@@ -212,7 +239,16 @@ fn stress_ttl_re_bumped_after_ledger_advancement() {
 
     // Phase 1: create 50 bills — TTL is set to INSTANCE_BUMP_AMOUNT
     for _ in 0..50 {
-        client.create_bill(&owner, &name, &100i128, &due_date, &false, &0u32, &None, &String::from_str(&env, "XLM"));
+        client.create_bill(
+            &owner,
+            &name,
+            &100i128,
+            &due_date,
+            &false,
+            &0u32,
+            &None,
+            &String::from_str(&env, "XLM"),
+        );
     }
 
     let ttl_batch1 = env.as_contract(&contract_id, || env.storage().instance().get_ttl());
@@ -243,7 +279,16 @@ fn stress_ttl_re_bumped_after_ledger_advancement() {
     );
 
     // Phase 3: one more create_bill triggers extend_ttl → re-bumped
-    client.create_bill(&owner, &name, &100i128, &due_date, &false, &0u32, &None, &String::from_str(&env, "XLM"));
+    client.create_bill(
+        &owner,
+        &name,
+        &100i128,
+        &due_date,
+        &false,
+        &0u32,
+        &None,
+        &String::from_str(&env, "XLM"),
+    );
 
     let ttl_rebumped = env.as_contract(&contract_id, || env.storage().instance().get_ttl());
     assert!(
@@ -265,7 +310,16 @@ fn stress_ttl_re_bumped_by_pay_bill_after_ledger_advancement() {
     let due_date = 2_000_000_000u64;
 
     // Create one bill to initialise instance storage
-    let bill_id = client.create_bill(&owner, &name, &500i128, &due_date, &false, &0u32, &None, &String::from_str(&env, "XLM"));
+    let bill_id = client.create_bill(
+        &owner,
+        &name,
+        &500i128,
+        &due_date,
+        &false,
+        &0u32,
+        &None,
+        &String::from_str(&env, "XLM"),
+    );
 
     // Advance ledger so TTL drops below threshold
     env.ledger().set(LedgerInfo {
@@ -311,7 +365,16 @@ fn stress_archive_100_paid_bills() {
 
     // Create 100 bills (IDs 1..=100)
     for _ in 0..100 {
-        client.create_bill(&owner, &name, &200i128, &due_date, &false, &0u32, &None, &String::from_str(&env, "XLM"));
+        client.create_bill(
+            &owner,
+            &name,
+            &200i128,
+            &due_date,
+            &false,
+            &0u32,
+            &None,
+            &String::from_str(&env, "XLM"),
+        );
     }
 
     // Pay all 100 bills (non-recurring, so no new bills created)
@@ -391,7 +454,16 @@ fn stress_archive_across_5_users() {
     for (i, user) in users.iter().enumerate() {
         let first = next_id;
         for _ in 0..BILLS_PER_USER {
-            client.create_bill(user, &name, &100i128, &due_date, &false, &0u32, &None, &String::from_str(&env, "XLM"));
+            client.create_bill(
+                user,
+                &name,
+                &100i128,
+                &due_date,
+                &false,
+                &0u32,
+                &None,
+                &String::from_str(&env, "XLM"),
+            );
             next_id += 1;
         }
         let last = next_id - 1;
@@ -435,7 +507,16 @@ fn bench_get_unpaid_bills_first_page_of_200() {
     let due_date = 2_000_000_000u64;
 
     for _ in 0..200 {
-        client.create_bill(&owner, &name, &100i128, &due_date, &false, &0u32, &None, &String::from_str(&env, "XLM"));
+        client.create_bill(
+            &owner,
+            &name,
+            &100i128,
+            &due_date,
+            &false,
+            &0u32,
+            &None,
+            &String::from_str(&env, "XLM"),
+        );
     }
 
     let (cpu, mem, page) = measure(&env, || client.get_unpaid_bills(&owner, &0u32, &50u32));
@@ -460,7 +541,16 @@ fn bench_get_unpaid_bills_last_page_of_200() {
     let due_date = 2_000_000_000u64;
 
     for _ in 0..200 {
-        client.create_bill(&owner, &name, &100i128, &due_date, &false, &0u32, &None, &String::from_str(&env, "XLM"));
+        client.create_bill(
+            &owner,
+            &name,
+            &100i128,
+            &due_date,
+            &false,
+            &0u32,
+            &None,
+            &String::from_str(&env, "XLM"),
+        );
     }
 
     // Navigate to the last page cursor
@@ -491,7 +581,16 @@ fn bench_archive_paid_bills_100() {
     let due_date = 1_700_000_000u64;
 
     for _ in 0..100 {
-        client.create_bill(&owner, &name, &100i128, &due_date, &false, &0u32, &None, &String::from_str(&env, "XLM"));
+        client.create_bill(
+            &owner,
+            &name,
+            &100i128,
+            &due_date,
+            &false,
+            &0u32,
+            &None,
+            &String::from_str(&env, "XLM"),
+        );
     }
     for id in 1u32..=100 {
         client.pay_bill(&owner, &id);
@@ -520,7 +619,16 @@ fn bench_get_total_unpaid_200_bills() {
     let due_date = 2_000_000_000u64;
 
     for _ in 0..200 {
-        client.create_bill(&owner, &name, &100i128, &due_date, &false, &0u32, &None, &String::from_str(&env, "XLM"));
+        client.create_bill(
+            &owner,
+            &name,
+            &100i128,
+            &due_date,
+            &false,
+            &0u32,
+            &None,
+            &String::from_str(&env, "XLM"),
+        );
     }
 
     let expected = 200i128 * 100;
@@ -618,15 +726,28 @@ fn stress_overdue_bills_pagination_correctness() {
 
     let name = String::from_str(&env, "StressOverdue");
     let initial_time = 1_700_000_000u64;
-    
-    // We will create 100 bills. 
+
+    // We will create 100 bills.
     // Odd IDs -> due_date = initial_time + 10_000 (will be overdue when time advances past this)
     // Even IDs -> due_date = initial_time + 50_000 (will NOT be overdue)
-    
+
     for i in 1..=100 {
         let owner = if i % 2 == 0 { &owner1 } else { &owner2 };
-        let due = if i % 2 != 0 { initial_time + 10_000 } else { initial_time + 50_000 };
-        client.create_bill(owner, &name, &100i128, &due, &false, &0u32, &None, &String::from_str(&env, "XLM"));
+        let due = if i % 2 != 0 {
+            initial_time + 10_000
+        } else {
+            initial_time + 50_000
+        };
+        client.create_bill(
+            owner,
+            &name,
+            &100i128,
+            &due,
+            &false,
+            &0u32,
+            &None,
+            &String::from_str(&env, "XLM"),
+        );
     }
 
     // Advance time to make odd IDs overdue
@@ -661,10 +782,13 @@ fn stress_overdue_bills_pagination_correctness() {
 
     // Verify exactly 50 overdue bills found
     assert_eq!(collected.len(), 50, "Must find exactly 50 overdue bills");
-    
+
     // Verify no duplicates and stable ordering
     for i in 0..collected.len() - 1 {
-        assert!(collected[i] < collected[i + 1], "Overdue bills must be strictly ordered by ID without duplicates");
+        assert!(
+            collected[i] < collected[i + 1],
+            "Overdue bills must be strictly ordered by ID without duplicates"
+        );
     }
 
     // Verify correctness: all collected must be odd IDs (which are the overdue ones)

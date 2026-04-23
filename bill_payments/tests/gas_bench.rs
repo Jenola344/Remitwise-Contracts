@@ -94,7 +94,13 @@ where
     (cpu, mem, result)
 }
 
-fn create_bill(client: &BillPaymentsClient, env: &Env, owner: &Address, name: &str, amount: i128) -> u32 {
+fn create_bill(
+    client: &BillPaymentsClient,
+    env: &Env,
+    owner: &Address,
+    name: &str,
+    amount: i128,
+) -> u32 {
     client.create_bill(
         owner,
         &String::from_str(env, name),
@@ -290,8 +296,12 @@ fn bench_bulk_cleanup_archived_mixed_age_with_thresholds() {
     let (cpu, mem, deleted_count) =
         measure(&env, || client.bulk_cleanup_bills(&owner, &cleanup_before));
     assert_eq!(deleted_count, 20);
-    assert!(client.get_archived_bill(&older_ids.get(0).unwrap()).is_none());
-    assert!(client.get_archived_bill(&newer_ids.get(0).unwrap()).is_some());
+    assert!(client
+        .get_archived_bill(&older_ids.get(0).unwrap())
+        .is_none());
+    assert!(client
+        .get_archived_bill(&newer_ids.get(0).unwrap())
+        .is_some());
 
     assert_regression_bounds(
         "bulk_cleanup_bills",

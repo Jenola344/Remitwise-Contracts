@@ -5,7 +5,9 @@ use soroban_sdk::{
     token::TokenClient, Address, Env, Map, Symbol, Vec,
 };
 
-use remitwise_common::{FamilyRole, EventCategory, EventPriority, RemitwiseEvents, CONTRACT_VERSION};
+use remitwise_common::{
+    EventCategory, EventPriority, FamilyRole, RemitwiseEvents, CONTRACT_VERSION,
+};
 
 // Storage TTL constants for active data
 const INSTANCE_LIFETIME_THRESHOLD: u32 = 17280;
@@ -356,7 +358,6 @@ impl FamilyWallet {
 
         true
     }
-
 
     pub fn add_member(
         env: Env,
@@ -1736,9 +1737,7 @@ impl FamilyWallet {
             .instance()
             .get(&symbol_short!("MEMBERS"))
             .unwrap_or_else(|| panic!("Wallet not initialized"));
-        let member = members
-            .get(proposer.clone())
-            .ok_or(Error::MemberNotFound)?;
+        let member = members.get(proposer.clone()).ok_or(Error::MemberNotFound)?;
 
         if matches!(member.role, FamilyRole::Owner | FamilyRole::Admin) {
             return Ok(());
@@ -2072,9 +2071,11 @@ impl FamilyWallet {
                 if require_auth {
                     proposer.require_auth();
                 }
-                if let Err(e) =
-                    Self::validate_precision_spending_internal(env.clone(), proposer.clone(), *amount)
-                {
+                if let Err(e) = Self::validate_precision_spending_internal(
+                    env.clone(),
+                    proposer.clone(),
+                    *amount,
+                ) {
                     panic_with_error!(env, e);
                 }
                 Self::record_precision_spending(env, proposer, *amount);
@@ -2313,7 +2314,6 @@ impl FamilyWallet {
             .instance()
             .set(&symbol_short!("STOR_STAT"), &stats);
     }
-
 }
 
 #[cfg(test)]

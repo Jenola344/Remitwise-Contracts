@@ -273,4 +273,3 @@ impl Insurance {
         }
     }
 }
-

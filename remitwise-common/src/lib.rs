@@ -135,7 +135,9 @@ impl RemitwiseEvents {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use soroban_sdk::{symbol_short, testutils::Events, Env, IntoVal, Symbol, TryFromVal, Val, Vec};
+    use soroban_sdk::{
+        symbol_short, testutils::Events, Env, IntoVal, Symbol, TryFromVal, Val, Vec,
+    };
 
     // -----------------------------------------------------------------------
     // clamp_limit – boundary and property tests
@@ -327,8 +329,14 @@ mod tests {
 
     #[test]
     fn pagination_defaults_are_sane() {
-        assert!(DEFAULT_PAGE_LIMIT >= 1, "Default page limit must be at least 1");
-        assert!(DEFAULT_PAGE_LIMIT <= MAX_PAGE_LIMIT, "Default must not exceed max");
+        assert!(
+            DEFAULT_PAGE_LIMIT >= 1,
+            "Default page limit must be at least 1"
+        );
+        assert!(
+            DEFAULT_PAGE_LIMIT <= MAX_PAGE_LIMIT,
+            "Default must not exceed max"
+        );
         assert_eq!(DEFAULT_PAGE_LIMIT, 20);
         assert_eq!(MAX_PAGE_LIMIT, 50);
     }
@@ -371,7 +379,11 @@ mod tests {
 
         let (_contract, topics, _data) = last_event(&env);
         let ns: Symbol = Symbol::try_from_val(&env, &topics.get(0).unwrap()).unwrap();
-        assert_eq!(ns, symbol_short!("Remitwise"), "Topic[0] must be the Remitwise namespace");
+        assert_eq!(
+            ns,
+            symbol_short!("Remitwise"),
+            "Topic[0] must be the Remitwise namespace"
+        );
     }
 
     #[test]
@@ -387,17 +399,14 @@ mod tests {
         ];
 
         for (cat, expected) in categories {
-            RemitwiseEvents::emit(
-                &env,
-                cat,
-                EventPriority::Low,
-                symbol_short!("t"),
-                0u32,
-            );
+            RemitwiseEvents::emit(&env, cat, EventPriority::Low, symbol_short!("t"), 0u32);
 
             let (_contract, topics, _data) = last_event(&env);
             let cat_val: u32 = u32::try_from_val(&env, &topics.get(1).unwrap()).unwrap();
-            assert_eq!(cat_val, expected, "Topic[1] category mismatch for discriminant {expected}");
+            assert_eq!(
+                cat_val, expected,
+                "Topic[1] category mismatch for discriminant {expected}"
+            );
         }
     }
 
@@ -422,7 +431,10 @@ mod tests {
 
             let (_contract, topics, _data) = last_event(&env);
             let pri_val: u32 = u32::try_from_val(&env, &topics.get(2).unwrap()).unwrap();
-            assert_eq!(pri_val, expected, "Topic[2] priority mismatch for discriminant {expected}");
+            assert_eq!(
+                pri_val, expected,
+                "Topic[2] priority mismatch for discriminant {expected}"
+            );
         }
     }
 
@@ -459,7 +471,10 @@ mod tests {
 
         let (_contract, _topics, data) = last_event(&env);
         let received: u32 = u32::try_from_val(&env, &data).unwrap();
-        assert_eq!(received, payload, "Event data payload must match emitted value");
+        assert_eq!(
+            received, payload,
+            "Event data payload must match emitted value"
+        );
     }
 
     #[test]
@@ -516,13 +531,7 @@ mod tests {
         let mut count = 0u32;
         for cat in &categories {
             for pri in &priorities {
-                RemitwiseEvents::emit(
-                    &env,
-                    *cat,
-                    *pri,
-                    symbol_short!("test"),
-                    count,
-                );
+                RemitwiseEvents::emit(&env, *cat, *pri, symbol_short!("test"), count);
 
                 let (_contract, topics, _data) = last_event(&env);
                 // Verify namespace is always "Remitwise"
@@ -546,12 +555,7 @@ mod tests {
     #[test]
     fn emit_batch_produces_four_topics() {
         let env = Env::default();
-        RemitwiseEvents::emit_batch(
-            &env,
-            EventCategory::Access,
-            symbol_short!("member"),
-            5,
-        );
+        RemitwiseEvents::emit_batch(&env, EventCategory::Access, symbol_short!("member"), 5);
 
         let (_contract, topics, _data) = last_event(&env);
         assert_eq!(topics.len(), 4, "Batch event must have exactly 4 topics");
@@ -560,12 +564,7 @@ mod tests {
     #[test]
     fn emit_batch_topic_0_is_namespace() {
         let env = Env::default();
-        RemitwiseEvents::emit_batch(
-            &env,
-            EventCategory::Access,
-            symbol_short!("member"),
-            5,
-        );
+        RemitwiseEvents::emit_batch(&env, EventCategory::Access, symbol_short!("member"), 5);
 
         let (_contract, topics, _data) = last_event(&env);
         let ns: Symbol = Symbol::try_from_val(&env, &topics.get(0).unwrap()).unwrap();
@@ -586,32 +585,30 @@ mod tests {
         ];
 
         for cat in categories {
-            RemitwiseEvents::emit_batch(
-                &env,
-                cat,
-                symbol_short!("op"),
-                1,
-            );
+            RemitwiseEvents::emit_batch(&env, cat, symbol_short!("op"), 1);
 
             let (_contract, topics, _data) = last_event(&env);
             let pri: u32 = u32::try_from_val(&env, &topics.get(2).unwrap()).unwrap();
-            assert_eq!(pri, EventPriority::Low.to_u32(), "Batch events must always use Low priority");
+            assert_eq!(
+                pri,
+                EventPriority::Low.to_u32(),
+                "Batch events must always use Low priority"
+            );
         }
     }
 
     #[test]
     fn emit_batch_topic_3_is_always_batch() {
         let env = Env::default();
-        RemitwiseEvents::emit_batch(
-            &env,
-            EventCategory::Access,
-            symbol_short!("member"),
-            10,
-        );
+        RemitwiseEvents::emit_batch(&env, EventCategory::Access, symbol_short!("member"), 10);
 
         let (_contract, topics, _data) = last_event(&env);
         let act: Symbol = Symbol::try_from_val(&env, &topics.get(3).unwrap()).unwrap();
-        assert_eq!(act, symbol_short!("batch"), "Topic[3] must always be 'batch' for batch events");
+        assert_eq!(
+            act,
+            symbol_short!("batch"),
+            "Topic[3] must always be 'batch' for batch events"
+        );
     }
 
     #[test]
@@ -632,16 +629,10 @@ mod tests {
     #[test]
     fn emit_batch_zero_count() {
         let env = Env::default();
-        RemitwiseEvents::emit_batch(
-            &env,
-            EventCategory::Transaction,
-            symbol_short!("noop"),
-            0,
-        );
+        RemitwiseEvents::emit_batch(&env, EventCategory::Transaction, symbol_short!("noop"), 0);
 
         let (_contract, _topics, data) = last_event(&env);
-        let (_action, count): (Symbol, u32) =
-            <(Symbol, u32)>::try_from_val(&env, &data).unwrap();
+        let (_action, count): (Symbol, u32) = <(Symbol, u32)>::try_from_val(&env, &data).unwrap();
         assert_eq!(count, 0);
     }
 
@@ -656,8 +647,7 @@ mod tests {
         );
 
         let (_contract, _topics, data) = last_event(&env);
-        let (_action, count): (Symbol, u32) =
-            <(Symbol, u32)>::try_from_val(&env, &data).unwrap();
+        let (_action, count): (Symbol, u32) = <(Symbol, u32)>::try_from_val(&env, &data).unwrap();
         assert_eq!(count, MAX_BATCH_SIZE);
     }
 
@@ -680,23 +670,24 @@ mod tests {
         let (_c1, topics_emit, _d1) = last_event(&env);
 
         // Emit a batch event with the same category
-        RemitwiseEvents::emit_batch(
-            &env,
-            EventCategory::Access,
-            symbol_short!("member"),
-            1,
-        );
+        RemitwiseEvents::emit_batch(&env, EventCategory::Access, symbol_short!("member"), 1);
         let (_c2, topics_batch, _d2) = last_event(&env);
 
         // Topic[0] (namespace) must be identical
         let ns_emit: Symbol = Symbol::try_from_val(&env, &topics_emit.get(0).unwrap()).unwrap();
         let ns_batch: Symbol = Symbol::try_from_val(&env, &topics_batch.get(0).unwrap()).unwrap();
-        assert_eq!(ns_emit, ns_batch, "Namespace must be identical across emit and emit_batch");
+        assert_eq!(
+            ns_emit, ns_batch,
+            "Namespace must be identical across emit and emit_batch"
+        );
 
         // Topic[1] (category) must be identical for same category
         let cat_emit: u32 = u32::try_from_val(&env, &topics_emit.get(1).unwrap()).unwrap();
         let cat_batch: u32 = u32::try_from_val(&env, &topics_batch.get(1).unwrap()).unwrap();
-        assert_eq!(cat_emit, cat_batch, "Category must be identical for same EventCategory");
+        assert_eq!(
+            cat_emit, cat_batch,
+            "Category must be identical for same EventCategory"
+        );
     }
 
     #[test]
@@ -711,12 +702,18 @@ mod tests {
         // Topic[3] should be "batch", not the action
         let topic_action: Symbol = Symbol::try_from_val(&env, &topics.get(3).unwrap()).unwrap();
         assert_eq!(topic_action, symbol_short!("batch"));
-        assert_ne!(topic_action, action, "Action must not appear in batch topic[3]");
+        assert_ne!(
+            topic_action, action,
+            "Action must not appear in batch topic[3]"
+        );
 
         // Action should be in the payload
         let (payload_action, _count): (Symbol, u32) =
             <(Symbol, u32)>::try_from_val(&env, &data).unwrap();
-        assert_eq!(payload_action, action, "Action must appear in batch payload");
+        assert_eq!(
+            payload_action, action,
+            "Action must appear in batch payload"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -768,7 +765,7 @@ mod tests {
 pub const DAY_IN_LEDGERS: u32 = 17280; // ~5 seconds per ledger
 
 pub const INSTANCE_BUMP_AMOUNT: u32 = 30 * DAY_IN_LEDGERS; // 30 days
-pub const INSTANCE_LIFETIME_THRESHOLD: u32 = 1 * DAY_IN_LEDGERS; // 1 day
+pub const INSTANCE_LIFETIME_THRESHOLD: u32 = DAY_IN_LEDGERS; // 1 day
 
 pub const PERSISTENT_BUMP_AMOUNT: u32 = 60 * DAY_IN_LEDGERS; // 60 days
 pub const PERSISTENT_LIFETIME_THRESHOLD: u32 = 15 * DAY_IN_LEDGERS; // 15 days

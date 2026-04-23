@@ -181,7 +181,11 @@ impl BillPayments {
         let s = &buf[..copy_len];
         // Trim leading/trailing ASCII spaces
         let start = s.iter().position(|&b| b != b' ').unwrap_or(copy_len);
-        let end = s.iter().rposition(|&b| b != b' ').map(|i| i + 1).unwrap_or(0);
+        let end = s
+            .iter()
+            .rposition(|&b| b != b' ')
+            .map(|i| i + 1)
+            .unwrap_or(0);
         if start >= end {
             return String::from_str(env, "XLM");
         }
@@ -193,33 +197,6 @@ impl BillPayments {
         }
         let upper_str = core::str::from_utf8(&upper[..trimmed.len()]).unwrap_or("XLM");
         String::from_str(env, upper_str)
-    }
-
-    fn validate_currency(currency: &String) -> Result<(), Error> {
-        let len = currency.len() as usize;
-        if len == 0 {
-            return Ok(()); // Will be normalized to "XLM"
-        }
-        let mut buf = [0u8; 64];
-        let copy_len = len.min(buf.len());
-        currency.copy_into_slice(&mut buf[..copy_len]);
-        let s = &buf[..copy_len];
-        // Trim spaces
-        let start = s.iter().position(|&b| b != b' ').unwrap_or(copy_len);
-        let end = s.iter().rposition(|&b| b != b' ').map(|i| i + 1).unwrap_or(0);
-        if start >= end {
-            return Ok(()); // empty after trim → will default to XLM
-        }
-        let trimmed = &s[start..end];
-        if trimmed.len() > 12 {
-            return Err(Error::InvalidCurrency);
-        }
-        for &b in trimmed {
-            if !b.is_ascii_alphanumeric() {
-                return Err(Error::InvalidCurrency);
-            }
-        }
-        Ok(())
     }
 
     fn get_pause_admin(env: &Env) -> Option<Address> {
@@ -253,7 +230,11 @@ impl BillPayments {
     // Pause / upgrade
     // -----------------------------------------------------------------------
 
-    pub fn set_pause_admin(env: Env, caller: Address, new_admin: Address) -> Result<(), BillPaymentsError> {
+    pub fn set_pause_admin(
+        env: Env,
+        caller: Address,
+        new_admin: Address,
+    ) -> Result<(), BillPaymentsError> {
         caller.require_auth();
         let current = Self::get_pause_admin(&env);
         match current {
@@ -642,11 +623,12 @@ impl BillPayments {
         bill.paid_at = Some(current_time);
 
         if bill.recurring {
-            let next_due_date = bill.due_date
+            let next_due_date = bill
+                .due_date
                 .checked_add(
                     (bill.frequency_days as u64)
                         .checked_mul(SECONDS_PER_DAY)
-                        .ok_or(Error::InvalidFrequency)?
+                        .ok_or(Error::InvalidFrequency)?,
                 )
                 .ok_or(Error::InvalidDueDate)?;
             let next_id = env
@@ -1172,7 +1154,9 @@ impl BillPayments {
             .instance()
             .get(&symbol_short!("ARCH_BILL"))
             .unwrap_or_else(|| Map::new(&env));
-        let archived_bill = archived.get(bill_id).ok_or(BillPaymentsError::BillNotFound)?;
+        let archived_bill = archived
+            .get(bill_id)
+            .ok_or(BillPaymentsError::BillNotFound)?;
 
         if archived_bill.owner != caller {
             return Err(BillPaymentsError::Unauthorized);
@@ -1357,11 +1341,12 @@ impl BillPayments {
 
             if bill.recurring {
                 next_id = next_id.saturating_add(1);
-                let next_due_date = bill.due_date
+                let next_due_date = bill
+                    .due_date
                     .checked_add(
                         (bill.frequency_days as u64)
                             .checked_mul(SECONDS_PER_DAY)
-                            .ok_or(Error::InvalidFrequency)?
+                            .ok_or(Error::InvalidFrequency)?,
                     )
                     .ok_or(Error::InvalidDueDate)?;
                 let next_bill = Bill {
@@ -1691,8 +1676,8 @@ impl BillPayments {
 #[cfg(test)]
 mod test {
     use super::*;
-    use remitwise_common::MAX_PAGE_LIMIT;
     use proptest::prelude::*;
+    use remitwise_common::MAX_PAGE_LIMIT;
     use soroban_sdk::{
         testutils::{Address as _, Ledger},
         Env, String,
@@ -1720,7 +1705,6 @@ mod test {
                 &false,
                 &0,
                 &None,
-
                 &String::from_str(env, "XLM"),
             );
             ids.push_back(id);
@@ -1956,7 +1940,6 @@ mod test {
                 &false,
                 &0,
                 &None,
-
                 &String::from_str(&env, "XLM"),
             );
             client.create_bill(
@@ -1967,7 +1950,6 @@ mod test {
                 &false,
                 &0,
                 &None,
-
                 &String::from_str(&env, "XLM"),
             );
         }
@@ -2042,7 +2024,6 @@ mod test {
                 &false,
                 &0,
                 &None,
-
                 &String::from_str(&env, "XLM"),
             );
         }
@@ -2160,7 +2141,6 @@ mod test {
             &true, // recurring
             &1,    // frequency_days = 1
             &None,
-
             &String::from_str(&env, "XLM"),
         );
 
@@ -2196,7 +2176,6 @@ mod test {
             &true, // recurring
             &30,   // frequency_days = 30
             &None,
-
             &String::from_str(&env, "XLM"),
         );
 
@@ -2235,7 +2214,6 @@ mod test {
             &true, // recurring
             &365,  // frequency_days = 365
             &None,
-
             &String::from_str(&env, "XLM"),
         );
 
@@ -2278,7 +2256,6 @@ mod test {
             &true,
             &30,
             &None,
-
             &String::from_str(&env, "XLM"),
         );
 
@@ -2311,7 +2288,6 @@ mod test {
             &true, // recurring
             &30,   // frequency_days = 30
             &None,
-
             &String::from_str(&env, "XLM"),
         );
 
@@ -2362,7 +2338,6 @@ mod test {
             &true, // recurring
             &30,   // frequency_days = 30
             &None,
-
             &String::from_str(&env, "XLM"),
         );
 
@@ -2410,7 +2385,6 @@ mod test {
             &true, // recurring
             &30,   // frequency_days = 30
             &None,
-
             &String::from_str(&env, "XLM"),
         );
 
@@ -2450,7 +2424,6 @@ mod test {
             &true,
             &frequency,
             &None,
-
             &String::from_str(&env, "XLM"),
         );
 
@@ -2488,7 +2461,6 @@ mod test {
             &true,
             &30,
             &None,
-
             &String::from_str(&env, "XLM"),
         );
 
@@ -2525,7 +2497,6 @@ mod test {
             &true,
             &30,
             &None,
-
             &String::from_str(&env, "XLM"),
         );
 
@@ -2567,7 +2538,6 @@ mod test {
             &true,
             &freq,
             &None,
-
             &String::from_str(&env, "XLM"),
         );
 
@@ -2760,11 +2730,27 @@ mod test {
 
         // 3. Execution: Attempt to create bills with invalid dates
         // Added '&currency' as the final argument to both calls
-        let result_past =
-            client.try_create_bill(&owner, &name, &1000, &past_due_date, &false, &0, &None, &currency);
+        let result_past = client.try_create_bill(
+            &owner,
+            &name,
+            &1000,
+            &past_due_date,
+            &false,
+            &0,
+            &None,
+            &currency,
+        );
 
-        let result_zero =
-            client.try_create_bill(&owner, &name, &1000, &zero_due_date, &false, &0, &None, &currency);
+        let result_zero = client.try_create_bill(
+            &owner,
+            &name,
+            &1000,
+            &zero_due_date,
+            &false,
+            &0,
+            &None,
+            &currency,
+        );
 
         // 4. Assertions
         assert!(
@@ -2817,7 +2803,6 @@ mod test {
             &false,
             &0,
             &None,
-
             &String::from_str(&env, "XLM"),
         );
 
@@ -2848,7 +2833,6 @@ mod test {
             &false,
             &0,
             &None,
-
             &String::from_str(&env, "XLM"),
         );
 
@@ -2885,7 +2869,6 @@ mod test {
             &false,
             &0,
             &None,
-
             &String::from_str(&env, "XLM"),
         );
 
@@ -2899,7 +2882,6 @@ mod test {
             &false,
             &0,
             &None,
-
             &String::from_str(&env, "XLM"),
         );
 
@@ -2935,7 +2917,6 @@ mod test {
             &false,
             &0,
             &None,
-
             &String::from_str(&env, "XLM"),
         );
 
@@ -3035,7 +3016,7 @@ mod test {
         // This will panic as expected because we are NOT mocking auths for this call
         // and 'owner.require_auth()' will fail.
         // We set mock_all_auths to false to disable the global mock.
-        env.set_auths(&[]); 
+        env.set_auths(&[]);
         client.pay_bill(&owner, &_bill_id);
     }
 
@@ -3181,12 +3162,4 @@ mod test {
 
         client.bulk_cleanup_bills(&admin, &1000000);
     }
-}
-
-fn extend_instance_ttl(env: &Env) {
-    // Extend the contract instance itself
-    env.storage().instance().extend_ttl(
-        INSTANCE_LIFETIME_THRESHOLD, 
-        INSTANCE_BUMP_AMOUNT
-    );
 }

@@ -301,7 +301,10 @@ fn test_schedule_id_uniqueness_across_operations() {
     // 2. Modify one
     client.modify_remittance_schedule(&owner, &id1, &(amount * 2), &(next_due + 100), &interval);
     let mod_schedule = client.get_remittance_schedule(&id1).unwrap();
-    assert_eq!(mod_schedule.id, id1, "Schedule ID must remain stable after modification");
+    assert_eq!(
+        mod_schedule.id, id1,
+        "Schedule ID must remain stable after modification"
+    );
 
     // 3. Cancel one
     client.cancel_remittance_schedule(&owner, &id2);
@@ -329,7 +332,7 @@ fn test_high_volume_schedule_creation_no_collisions() {
 
     let amount = 1000_i128;
     let next_due = env.ledger().timestamp() + 86400;
-    
+
     // Create 500 schedules and track IDs
     let mut ids = soroban_sdk::Vec::new(&env);
     for i in 0..500 {
@@ -341,7 +344,11 @@ fn test_high_volume_schedule_creation_no_collisions() {
     // In soroban testing we can just use a Map for O(n)
     let mut seen = soroban_sdk::Map::new(&env);
     for id in ids.iter() {
-        assert!(seen.get(id).is_none(), "Collision detected for schedule ID: {}", id);
+        assert!(
+            seen.get(id).is_none(),
+            "Collision detected for schedule ID: {}",
+            id
+        );
         seen.set(id, true);
     }
 }
