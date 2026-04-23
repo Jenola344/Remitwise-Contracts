@@ -168,6 +168,14 @@ pub struct AuditEntry {
     pub success: bool,
 }
 
+#[contracttype]
+#[derive(Clone)]
+pub struct AuditPage {
+    pub items: Vec<AuditEntry>,
+    pub next_cursor: u32,
+    pub count: u32,
+}
+
 /// Paginated result for schedule queries.
 ///
 /// Provides stable cursor-based pagination so consumers can replay the schedule list
@@ -1156,7 +1164,7 @@ impl RemittanceSplit {
             owner_ids.push_back(schedule.id);
         }
         // Ensure deterministic ordering for consistent query results
-        owner_ids.sort_unstable();
+        Self::sort_u32_vec(&mut owner_ids);
         env.storage()
             .persistent()
             .set(&DataKey::OwnerSchedules(caller.clone()), &owner_ids);
@@ -1574,6 +1582,23 @@ impl RemittanceSplit {
             .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
     }
 
+    fn sort_u32_vec(v: &mut Vec<u32>) {
+        let len = v.len();
+        for i in 1..len {
+            let key = v.get(i).unwrap_or(0);
+            let mut j = i;
+            while j > 0 {
+                let prev = v.get(j - 1).unwrap_or(0);
+                if prev <= key {
+                    break;
+                }
+                v.set(j, prev);
+                j -= 1;
+            }
+            v.set(j, key);
+        }
+    }
+
     /// Create a new automatic remittance schedule for the split owner.
     ///
     /// # Arguments
@@ -1621,7 +1646,7 @@ impl RemittanceSplit {
             .persistent()
             .get(&DataKey::OwnerSchedules(owner.clone()))
             .unwrap_or_else(|| Vec::new(&env));
-        
+
         if owner_schedules.len() >= MAX_SCHEDULES_PER_OWNER as u32 {
             return Err(RemittanceSplitError::ScheduleCapExceeded);
         }
@@ -1676,7 +1701,7 @@ impl RemittanceSplit {
             .unwrap_or_else(|| Vec::new(&env));
         owner_schedules.push_back(next_schedule_id);
         // Ensure deterministic ordering for consistent query results
-        owner_schedules.sort_unstable();
+        Self::sort_u32_vec(&mut owner_schedules);
         env.storage()
             .persistent()
             .set(&DataKey::OwnerSchedules(owner.clone()), &owner_schedules);
@@ -1846,7 +1871,7 @@ impl RemittanceSplit {
 
         // Ensure deterministic ordering by sorting IDs ascending
         // This guarantees consistent results regardless of storage order
-        schedule_ids.sort_unstable();
+        Self::sort_u32_vec(&mut schedule_ids);
 
         let mut result = Vec::new(&env);
         for id in schedule_ids.iter() {
@@ -1883,7 +1908,7 @@ impl RemittanceSplit {
     /// - `limit` is clamped to prevent excessive gas usage
     /// - Out-of-range `from_index` returns empty page safely
     /// - Cancelled schedules are included (they remain in storage for audit)
-    pub fn get_remittance_schedules_paginated(
+    pub fn get_schedules_paginated(
         env: Env,
         owner: Address,
         from_index: u32,
@@ -1897,7 +1922,7 @@ impl RemittanceSplit {
 
         // Ensure deterministic ordering by sorting IDs ascending
         // This guarantees stable pagination even if storage order changes
-        schedule_ids.sort_unstable();
+        Self::sort_u32_vec(&mut schedule_ids);
 
         let len = schedule_ids.len();
         let cap = clamp_limit(limit);

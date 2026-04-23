@@ -109,7 +109,14 @@ fn contract_policy_page_ordering_and_cursor_correctness() {
 
     let mut created_ids = std::vec::Vec::new();
     for _ in 0..6 {
-        let id = client.create_policy(&owner, &name, &CoverageType::Health, &120i128, &12_000i128, &None);
+        let id = client.create_policy(
+            &owner,
+            &name,
+            &CoverageType::Health,
+            &120i128,
+            &12_000i128,
+            &None,
+        );
         created_ids.push(id);
     }
 
@@ -143,7 +150,10 @@ fn contract_policy_page_ordering_and_cursor_correctness() {
             break;
         }
 
-        assert!(page.count > 0, "non-terminal pages must contain at least one item");
+        assert!(
+            page.count > 0,
+            "non-terminal pages must contain at least one item"
+        );
         let last_index = page.count - 1;
         let last_policy_id = page.items.get(last_index).unwrap().id;
         assert_eq!(

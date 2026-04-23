@@ -5,8 +5,7 @@ use remitwise_common::{EventCategory, EventPriority};
 use soroban_sdk::{
     symbol_short,
     testutils::{Address as _, Events, Ledger},
-    Address, Env, String, TryFromVal, Val,
-    Vec as SorobanVec,
+    Address, Env, String, TryFromVal, Val, Vec as SorobanVec,
 };
 
 // ---------------------------------------------------------------------------
@@ -44,9 +43,7 @@ fn insurance_events_for(
         let topics = &event.1;
         if topics.len() >= 4 {
             if let Ok(ns) = soroban_sdk::Symbol::try_from_val(env, &topics.get(0).unwrap()) {
-                if let Ok(act) =
-                    soroban_sdk::Symbol::try_from_val(env, &topics.get(3).unwrap())
-                {
+                if let Ok(act) = soroban_sdk::Symbol::try_from_val(env, &topics.get(3).unwrap()) {
                     if ns == symbol_short!("Remitwise") && act == action {
                         result.push_back(event);
                     }
@@ -58,7 +55,13 @@ fn insurance_events_for(
 }
 
 /// Decode topic[i] as a Symbol and assert it equals `expected`.
-fn assert_topic_sym(env: &Env, topics: &SorobanVec<Val>, i: u32, expected: soroban_sdk::Symbol, label: &str) {
+fn assert_topic_sym(
+    env: &Env,
+    topics: &SorobanVec<Val>,
+    i: u32,
+    expected: soroban_sdk::Symbol,
+    label: &str,
+) {
     let actual = soroban_sdk::Symbol::try_from_val(env, &topics.get(i).unwrap())
         .unwrap_or_else(|_| panic!("{label}: topic[{i}] is not a Symbol"));
     assert_eq!(actual, expected, "{label}: topic[{i}] value mismatch");
@@ -442,7 +445,11 @@ fn test_get_total_monthly_premium_zero_with_no_policies() {
 /// Event category/priority numeric values must not change.
 #[test]
 fn test_event_category_priority_discriminants_are_stable() {
-    assert_eq!(EventCategory::Transaction as u32, 0, "Transaction category moved");
+    assert_eq!(
+        EventCategory::Transaction as u32,
+        0,
+        "Transaction category moved"
+    );
     assert_eq!(EventCategory::State as u32, 1, "State category moved");
     assert_eq!(EventPriority::Low as u32, 0, "Low priority moved");
     assert_eq!(EventPriority::Medium as u32, 1, "Medium priority moved");
@@ -479,18 +486,46 @@ fn test_policy_created_event_schema() {
     let topics = event.1.clone();
 
     // Topic schema: (Remitwise, Transaction=0, Medium=1, "created")
-    assert_topic_sym(&env, &topics, 0, symbol_short!("Remitwise"), "PolicyCreated");
-    assert_topic_u32(&env, &topics, 1, EventCategory::Transaction as u32, "PolicyCreated");
-    assert_topic_u32(&env, &topics, 2, EventPriority::Medium as u32, "PolicyCreated");
+    assert_topic_sym(
+        &env,
+        &topics,
+        0,
+        symbol_short!("Remitwise"),
+        "PolicyCreated",
+    );
+    assert_topic_u32(
+        &env,
+        &topics,
+        1,
+        EventCategory::Transaction as u32,
+        "PolicyCreated",
+    );
+    assert_topic_u32(
+        &env,
+        &topics,
+        2,
+        EventPriority::Medium as u32,
+        "PolicyCreated",
+    );
     assert_topic_sym(&env, &topics, 3, symbol_short!("created"), "PolicyCreated");
 
     // Payload: decode as PolicyCreatedEvent and verify every field
     let data: PolicyCreatedEvent = PolicyCreatedEvent::try_from_val(&env, &event.2).unwrap();
     assert_eq!(data.policy_id, id, "payload.policy_id mismatch");
     assert_eq!(data.owner, owner, "payload.owner mismatch");
-    assert_eq!(data.coverage_type, CoverageType::Health, "payload.coverage_type mismatch");
-    assert_eq!(data.monthly_premium, 1_000i128, "payload.monthly_premium mismatch");
-    assert_eq!(data.coverage_amount, 10_000i128, "payload.coverage_amount mismatch");
+    assert_eq!(
+        data.coverage_type,
+        CoverageType::Health,
+        "payload.coverage_type mismatch"
+    );
+    assert_eq!(
+        data.monthly_premium, 1_000i128,
+        "payload.monthly_premium mismatch"
+    );
+    assert_eq!(
+        data.coverage_amount, 10_000i128,
+        "payload.coverage_amount mismatch"
+    );
     assert_eq!(data.timestamp, 500_000u64, "payload.timestamp mismatch");
 }
 
@@ -512,7 +547,13 @@ fn test_premium_paid_event_schema() {
 
     // Topic schema: (Remitwise, Transaction=0, Low=0, "paid")
     assert_topic_sym(&env, &topics, 0, symbol_short!("Remitwise"), "PremiumPaid");
-    assert_topic_u32(&env, &topics, 1, EventCategory::Transaction as u32, "PremiumPaid");
+    assert_topic_u32(
+        &env,
+        &topics,
+        1,
+        EventCategory::Transaction as u32,
+        "PremiumPaid",
+    );
     assert_topic_u32(&env, &topics, 2, EventPriority::Low as u32, "PremiumPaid");
     assert_topic_sym(&env, &topics, 3, symbol_short!("paid"), "PremiumPaid");
 
@@ -521,7 +562,11 @@ fn test_premium_paid_event_schema() {
     assert_eq!(data.policy_id, id, "payload.policy_id mismatch");
     assert_eq!(data.owner, owner, "payload.owner mismatch");
     assert_eq!(data.amount, 1_000i128, "payload.amount mismatch");
-    assert_eq!(data.next_payment_date, 2_000_000 + 30 * 86_400, "payload.next_payment_date mismatch");
+    assert_eq!(
+        data.next_payment_date,
+        2_000_000 + 30 * 86_400,
+        "payload.next_payment_date mismatch"
+    );
     assert_eq!(data.timestamp, 2_000_000u64, "payload.timestamp mismatch");
 }
 
@@ -537,18 +582,47 @@ fn test_policy_deactivated_event_schema() {
     client.deactivate_policy(&owner, &id);
 
     let events = insurance_events_for(&env, EVT_POLICY_DEACTIVATED);
-    assert_eq!(events.len(), 1, "expected exactly one PolicyDeactivated event");
+    assert_eq!(
+        events.len(),
+        1,
+        "expected exactly one PolicyDeactivated event"
+    );
     let event = events.get(0).unwrap();
     let topics = event.1.clone();
 
     // Topic schema: (Remitwise, State=1, Medium=1, "deactive")
-    assert_topic_sym(&env, &topics, 0, symbol_short!("Remitwise"), "PolicyDeactivated");
-    assert_topic_u32(&env, &topics, 1, EventCategory::State as u32, "PolicyDeactivated");
-    assert_topic_u32(&env, &topics, 2, EventPriority::Medium as u32, "PolicyDeactivated");
-    assert_topic_sym(&env, &topics, 3, symbol_short!("deactive"), "PolicyDeactivated");
+    assert_topic_sym(
+        &env,
+        &topics,
+        0,
+        symbol_short!("Remitwise"),
+        "PolicyDeactivated",
+    );
+    assert_topic_u32(
+        &env,
+        &topics,
+        1,
+        EventCategory::State as u32,
+        "PolicyDeactivated",
+    );
+    assert_topic_u32(
+        &env,
+        &topics,
+        2,
+        EventPriority::Medium as u32,
+        "PolicyDeactivated",
+    );
+    assert_topic_sym(
+        &env,
+        &topics,
+        3,
+        symbol_short!("deactive"),
+        "PolicyDeactivated",
+    );
 
     // Payload: decode and verify all fields
-    let data: PolicyDeactivatedEvent = PolicyDeactivatedEvent::try_from_val(&env, &event.2).unwrap();
+    let data: PolicyDeactivatedEvent =
+        PolicyDeactivatedEvent::try_from_val(&env, &event.2).unwrap();
     assert_eq!(data.policy_id, id, "payload.policy_id mismatch");
     assert_eq!(data.owner, owner, "payload.owner mismatch");
     assert_eq!(data.timestamp, 4_000_000u64, "payload.timestamp mismatch");
@@ -567,21 +641,54 @@ fn test_external_ref_updated_event_schema() {
     client.set_external_ref(&owner, &id, &Some(new_ref.clone()));
 
     let events = insurance_events_for(&env, EVT_EXT_REF_UPDATED);
-    assert_eq!(events.len(), 1, "expected exactly one ExternalRefUpdated event");
+    assert_eq!(
+        events.len(),
+        1,
+        "expected exactly one ExternalRefUpdated event"
+    );
     let event = events.get(0).unwrap();
     let topics = event.1.clone();
 
     // Topic schema: (Remitwise, State=1, Low=0, "ext_ref")
-    assert_topic_sym(&env, &topics, 0, symbol_short!("Remitwise"), "ExternalRefUpdated");
-    assert_topic_u32(&env, &topics, 1, EventCategory::State as u32, "ExternalRefUpdated");
-    assert_topic_u32(&env, &topics, 2, EventPriority::Low as u32, "ExternalRefUpdated");
-    assert_topic_sym(&env, &topics, 3, symbol_short!("ext_ref"), "ExternalRefUpdated");
+    assert_topic_sym(
+        &env,
+        &topics,
+        0,
+        symbol_short!("Remitwise"),
+        "ExternalRefUpdated",
+    );
+    assert_topic_u32(
+        &env,
+        &topics,
+        1,
+        EventCategory::State as u32,
+        "ExternalRefUpdated",
+    );
+    assert_topic_u32(
+        &env,
+        &topics,
+        2,
+        EventPriority::Low as u32,
+        "ExternalRefUpdated",
+    );
+    assert_topic_sym(
+        &env,
+        &topics,
+        3,
+        symbol_short!("ext_ref"),
+        "ExternalRefUpdated",
+    );
 
     // Payload: decode and verify all fields
-    let data: ExternalRefUpdatedEvent = ExternalRefUpdatedEvent::try_from_val(&env, &event.2).unwrap();
+    let data: ExternalRefUpdatedEvent =
+        ExternalRefUpdatedEvent::try_from_val(&env, &event.2).unwrap();
     assert_eq!(data.policy_id, id, "payload.policy_id mismatch");
     assert_eq!(data.owner, owner, "payload.owner mismatch");
-    assert_eq!(data.external_ref, Some(new_ref), "payload.external_ref mismatch");
+    assert_eq!(
+        data.external_ref,
+        Some(new_ref),
+        "payload.external_ref mismatch"
+    );
     assert_eq!(data.timestamp, 6_000_000u64, "payload.timestamp mismatch");
 }
 
@@ -606,7 +713,10 @@ fn test_external_ref_updated_event_schema_none_value() {
     assert_eq!(events.len(), 1);
     let data: ExternalRefUpdatedEvent =
         ExternalRefUpdatedEvent::try_from_val(&env, &events.get(0).unwrap().2).unwrap();
-    assert!(data.external_ref.is_none(), "clearing must emit None in payload");
+    assert!(
+        data.external_ref.is_none(),
+        "clearing must emit None in payload"
+    );
 }
 
 /// Each lifecycle operation emits exactly one Remitwise-namespaced event.
@@ -681,7 +791,11 @@ fn test_batch_pay_premiums_event_per_policy() {
     client.batch_pay_premiums(&owner, &ids);
 
     let paid_events = insurance_events_for(&env, EVT_PREMIUM_PAID);
-    assert_eq!(paid_events.len(), 2, "batch must emit one event per paid policy only");
+    assert_eq!(
+        paid_events.len(),
+        2,
+        "batch must emit one event per paid policy only"
+    );
 }
 
 /// PayloadSchema: PremiumPaidEvent from batch carries correct per-policy data.
