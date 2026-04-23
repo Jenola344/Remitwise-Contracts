@@ -11,7 +11,8 @@ This document provides a comprehensive access-control matrix mapping each public
 | Public Method | Required Caller | Access Control Details |
 |--------------|-----------------|------------------------|
 | `create_bill` | Owner | Owner must authorize (`owner.require_auth()`). Validates amount > 0. |
-| `pay_bill` | Owner | Owner must authorize. Must own the bill. Bill must not be paid. || `set_external_ref` | Owner | Owner-only update/clear for bill external_ref. || `get_bill` | Anyone | No auth required. Returns Option<Bill>. |
+| `pay_bill` | Owner | Owner must authorize. Must own the bill. Bill must not be paid. |
+| `get_bill` | Anyone | No auth required. Returns Option<Bill>. |
 | `get_unpaid_bills` | Anyone | No auth required. Paginated query filtered by owner. |
 | `get_all_bills_for_owner` | Owner | Owner must authorize. Returns all bills (paid + unpaid). |
 | `get_overdue_bills` | Anyone | No auth. Returns unpaid bills past due date. |
