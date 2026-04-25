@@ -405,12 +405,12 @@ impl ReportingContract {
         total_amount: i128,
         period_start: u64,
         period_end: u64,
-    ) -> RemittanceSummary {
+    ) -> Result<RemittanceSummary, ReportingError> {
         let addresses: ContractAddresses = env
             .storage()
             .instance()
             .get(&symbol_short!("ADDRS"))
-            .unwrap_or_else(|| panic!("Contract addresses not configured"));
+            .ok_or(ReportingError::AddressesNotConfigured)?;
 
         let split_client = RemittanceSplitClient::new(&env, &addresses.remittance_split);
         let split_percentages = split_client.get_split();
@@ -432,13 +432,13 @@ impl ReportingContract {
             });
         }
 
-        RemittanceSummary {
+        Ok(RemittanceSummary {
             total_received: total_amount,
             total_allocated: total_amount,
             category_breakdown: breakdown,
             period_start,
             period_end,
-        }
+        })
     }
 
     /// Generate savings progress report
@@ -447,12 +447,12 @@ impl ReportingContract {
         user: Address,
         period_start: u64,
         period_end: u64,
-    ) -> SavingsReport {
+    ) -> Result<SavingsReport, ReportingError> {
         let addresses: ContractAddresses = env
             .storage()
             .instance()
             .get(&symbol_short!("ADDRS"))
-            .unwrap_or_else(|| panic!("Contract addresses not configured"));
+            .ok_or(ReportingError::AddressesNotConfigured)?;
 
         let savings_client = SavingsGoalsClient::new(&env, &addresses.savings_goals);
         let goals = savings_client.get_all_goals(&user);
@@ -476,7 +476,7 @@ impl ReportingContract {
             0
         };
 
-        SavingsReport {
+        Ok(SavingsReport {
             total_goals,
             completed_goals: completed_count,
             total_target,
@@ -484,7 +484,7 @@ impl ReportingContract {
             completion_percentage,
             period_start,
             period_end,
-        }
+        })
     }
 
     /// Generate bill payment compliance report
@@ -493,12 +493,12 @@ impl ReportingContract {
         user: Address,
         period_start: u64,
         period_end: u64,
-    ) -> BillComplianceReport {
+    ) -> Result<BillComplianceReport, ReportingError> {
         let addresses: ContractAddresses = env
             .storage()
             .instance()
             .get(&symbol_short!("ADDRS"))
-            .unwrap_or_else(|| panic!("Contract addresses not configured"));
+            .ok_or(ReportingError::AddressesNotConfigured)?;
 
         let bill_client = BillPaymentsClient::new(&env, &addresses.bill_payments);
         let page = bill_client.get_all_bills_for_owner(&user, &0u32, &50u32);
@@ -541,7 +541,7 @@ impl ReportingContract {
             100
         };
 
-        BillComplianceReport {
+        Ok(BillComplianceReport {
             total_bills,
             paid_bills,
             unpaid_bills,
@@ -552,7 +552,7 @@ impl ReportingContract {
             compliance_percentage,
             period_start,
             period_end,
-        }
+        })
     }
 
     /// Generate insurance coverage report
@@ -561,12 +561,12 @@ impl ReportingContract {
         user: Address,
         period_start: u64,
         period_end: u64,
-    ) -> InsuranceReport {
+    ) -> Result<InsuranceReport, ReportingError> {
         let addresses: ContractAddresses = env
             .storage()
             .instance()
             .get(&symbol_short!("ADDRS"))
-            .unwrap_or_else(|| panic!("Contract addresses not configured"));
+            .ok_or(ReportingError::AddressesNotConfigured)?;
 
         let insurance_client = InsuranceClient::new(&env, &addresses.insurance);
         let policy_page = insurance_client.get_active_policies(&user, &0, &50);
@@ -587,7 +587,7 @@ impl ReportingContract {
             0
         };
 
-        InsuranceReport {
+        Ok(InsuranceReport {
             active_policies,
             total_coverage,
             monthly_premium,
@@ -595,16 +595,16 @@ impl ReportingContract {
             coverage_to_premium_ratio,
             period_start,
             period_end,
-        }
+        })
     }
 
     /// Calculate financial health score
-    pub fn calculate_health_score(env: Env, user: Address, _total_remittance: i128) -> HealthScore {
+    pub fn calculate_health_score(env: Env, user: Address, _total_remittance: i128) -> Result<HealthScore, ReportingError> {
         let addresses: ContractAddresses = env
             .storage()
             .instance()
             .get(&symbol_short!("ADDRS"))
-            .unwrap_or_else(|| panic!("Contract addresses not configured"));
+            .ok_or(ReportingError::AddressesNotConfigured)?;
 
         // Savings score (0-40 points)
         let savings_client = SavingsGoalsClient::new(&env, &addresses.savings_goals);
@@ -650,12 +650,12 @@ impl ReportingContract {
 
         let total_score = savings_score + bills_score + insurance_score;
 
-        HealthScore {
+        Ok(HealthScore {
             score: total_score,
             savings_score,
             bills_score,
             insurance_score,
-        }
+        })
     }
 
     /// Generate comprehensive financial health report
@@ -665,22 +665,22 @@ impl ReportingContract {
         total_remittance: i128,
         period_start: u64,
         period_end: u64,
-    ) -> FinancialHealthReport {
+    ) -> Result<FinancialHealthReport, ReportingError> {
         let health_score =
-            Self::calculate_health_score(env.clone(), user.clone(), total_remittance);
+            Self::calculate_health_score(env.clone(), user.clone(), total_remittance)?;
         let remittance_summary = Self::get_remittance_summary(
             env.clone(),
             user.clone(),
             total_remittance,
             period_start,
             period_end,
-        );
+        )?;
         let savings_report =
-            Self::get_savings_report(env.clone(), user.clone(), period_start, period_end);
+            Self::get_savings_report(env.clone(), user.clone(), period_start, period_end)?;
         let bill_compliance =
-            Self::get_bill_compliance_report(env.clone(), user.clone(), period_start, period_end);
+            Self::get_bill_compliance_report(env.clone(), user.clone(), period_start, period_end)?;
         let insurance_report =
-            Self::get_insurance_report(env.clone(), user, period_start, period_end);
+            Self::get_insurance_report(env.clone(), user, period_start, period_end)?;
 
         let generated_at = env.ledger().timestamp();
 
@@ -689,14 +689,14 @@ impl ReportingContract {
             generated_at,
         );
 
-        FinancialHealthReport {
+        Ok(FinancialHealthReport {
             health_score,
             remittance_summary,
             savings_report,
             bill_compliance,
             insurance_report,
             generated_at,
-        }
+        })
     }
 
     /// Generate trend analysis comparing two periods
@@ -785,18 +785,18 @@ impl ReportingContract {
     /// * `before_timestamp` - Archive reports generated before this timestamp
     ///
     /// # Returns
-    /// Number of reports archived
-    pub fn archive_old_reports(env: Env, caller: Address, before_timestamp: u64) -> u32 {
+    /// Result with number of reports archived
+    pub fn archive_old_reports(env: Env, caller: Address, before_timestamp: u64) -> Result<u32, ReportingError> {
         caller.require_auth();
 
         let admin: Address = env
             .storage()
             .instance()
             .get(&symbol_short!("ADMIN"))
-            .unwrap_or_else(|| panic!("Contract not initialized"));
+            .ok_or(ReportingError::NotInitialized)?;
 
         if caller != admin {
-            panic!("Only admin can archive reports");
+            return Err(ReportingError::Unauthorized);
         }
 
         Self::extend_instance_ttl(&env);
@@ -853,7 +853,7 @@ impl ReportingContract {
             (archived_count, caller),
         );
 
-        archived_count
+        Ok(archived_count)
     }
 
     /// Get archived reports for a user
@@ -886,18 +886,18 @@ impl ReportingContract {
     /// * `before_timestamp` - Delete archives created before this timestamp
     ///
     /// # Returns
-    /// Number of archives deleted
-    pub fn cleanup_old_reports(env: Env, caller: Address, before_timestamp: u64) -> u32 {
+    /// Result with number of archives deleted
+    pub fn cleanup_old_reports(env: Env, caller: Address, before_timestamp: u64) -> Result<u32, ReportingError> {
         caller.require_auth();
 
         let admin: Address = env
             .storage()
             .instance()
             .get(&symbol_short!("ADMIN"))
-            .unwrap_or_else(|| panic!("Contract not initialized"));
+            .ok_or(ReportingError::NotInitialized)?;
 
         if caller != admin {
-            panic!("Only admin can cleanup reports");
+            return Err(ReportingError::Unauthorized);
         }
 
         Self::extend_instance_ttl(&env);
@@ -935,7 +935,7 @@ impl ReportingContract {
             (deleted_count, caller),
         );
 
-        deleted_count
+        Ok(deleted_count)
     }
 
     /// Get storage usage statistics
