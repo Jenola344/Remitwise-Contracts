@@ -168,6 +168,15 @@ pub struct AuditEntry {
     pub success: bool,
 }
 
+/// Paginated result for audit log queries.
+#[contracttype]
+#[derive(Clone)]
+pub struct AuditPage {
+    pub items: Vec<AuditEntry>,
+    pub next_cursor: u32,
+    pub count: u32,
+}
+
 /// Paginated result for schedule queries.
 ///
 /// Provides stable cursor-based pagination so consumers can replay the schedule list
@@ -179,6 +188,22 @@ pub struct SchedulePage {
     pub items: Vec<RemittanceSchedule>,
     /// Index to pass as `from_index` for the next page. 0 means no more pages.
     pub next_cursor: u32,
+    /// Number of items returned in this page.
+    pub count: u32,
+}
+
+/// Paginated result for `get_remittance_schedules_page`.
+///
+/// Uses `Option<u32>` for `next_cursor` so callers can distinguish
+/// "no more pages" (`None`) from a valid cursor value without relying
+/// on a sentinel zero.
+#[contracttype]
+#[derive(Clone)]
+pub struct RemittanceSchedulePage {
+    /// Schedule entries for this page, ordered by ID ascending.
+    pub items: Vec<RemittanceSchedule>,
+    /// Cursor to pass as `cursor` for the next page. `None` means no more pages.
+    pub next_cursor: Option<u32>,
     /// Number of items returned in this page.
     pub count: u32,
 }
@@ -1934,5 +1959,66 @@ impl RemittanceSplit {
         env.storage()
             .persistent()
             .get(&DataKey::Schedule(schedule_id))
+    }
+
+    /// Get a single page of remittance schedules for `owner` using cursor-based pagination.
+    ///
+    /// Schedules are ordered by ID ascending. `cursor` is a zero-based index into the
+    /// owner's sorted schedule list. `limit` is clamped to `MAX_PAGE_LIMIT` via
+    /// `clamp_limit()` from `remitwise-common`.
+    ///
+    /// # Arguments
+    /// * `owner`  - Address whose schedules are queried (public read, no auth required)
+    /// * `cursor` - Zero-based start index (pass `0` for the first page)
+    /// * `limit`  - Maximum items to return; clamped to `[1, MAX_PAGE_LIMIT]`
+    ///
+    /// # Returns
+    /// `RemittanceSchedulePage` with:
+    /// - `items`: schedules for this page, ordered by ID ascending
+    /// - `next_cursor`: `Some(next_index)` when more pages exist, `None` when exhausted
+    /// - `count`: number of items in this page
+    pub fn get_remittance_schedules_page(
+        env: Env,
+        owner: Address,
+        cursor: u32,
+        limit: u32,
+    ) -> RemittanceSchedulePage {
+        let mut schedule_ids: Vec<u32> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::OwnerSchedules(owner.clone()))
+            .unwrap_or_else(|| Vec::new(&env));
+
+        schedule_ids.sort_unstable();
+
+        let len = schedule_ids.len();
+        let cap = clamp_limit(limit);
+
+        if cursor >= len {
+            return RemittanceSchedulePage {
+                items: Vec::new(&env),
+                next_cursor: None,
+                count: 0,
+            };
+        }
+
+        let end = cursor.saturating_add(cap).min(len);
+        let mut items = Vec::new(&env);
+        for i in cursor..end {
+            if let Some(id) = schedule_ids.get(i) {
+                if let Some(schedule) = env.storage().persistent().get(&DataKey::Schedule(id)) {
+                    items.push_back(schedule);
+                }
+            }
+        }
+
+        let count = items.len();
+        let next_cursor = if end < len { Some(end) } else { None };
+
+        RemittanceSchedulePage {
+            items,
+            next_cursor,
+            count,
+        }
     }
 }
