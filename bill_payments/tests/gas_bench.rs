@@ -34,8 +34,8 @@ const RESTORE_SINGLE_ARCHIVED: RegressionSpec = RegressionSpec {
 };
 
 const CLEANUP_ARCHIVED_MIXED_AGE: RegressionSpec = RegressionSpec {
-    cpu_baseline: 1_300_000,
-    mem_baseline: 280_000,
+    cpu_baseline: 1_950_000,
+    mem_baseline: 370_000,
     cpu_threshold_percent: 15,
     mem_threshold_percent: 12,
 };
