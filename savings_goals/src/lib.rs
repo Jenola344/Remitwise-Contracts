@@ -9,12 +9,16 @@ use soroban_sdk::{
 // Event topics
 const GOAL_CREATED: Symbol = symbol_short!("created");
 const GOAL_COMPLETED: Symbol = symbol_short!("completed");
+const FUNDS_ADDED: Symbol = symbol_short!("added");
+const FUNDS_WITHDRAWN: Symbol = symbol_short!("withdrawn");
 
 #[derive(Clone)]
 #[contracttype]
 pub struct GoalCreatedEvent {
     pub goal_id: u32,
     pub owner: Address,
+    pub amount: i128,      // Initial amount (0)
+    pub new_total: i128,   // Initial total (0)
     pub name: String,
     pub target_amount: i128,
     pub target_date: u64,
@@ -46,8 +50,9 @@ pub struct FundsWithdrawnEvent {
 pub struct GoalCompletedEvent {
     pub goal_id: u32,
     pub owner: Address,
+    pub amount: i128,      // Final contribution amount
+    pub new_total: i128,   // Total amount reached
     pub name: String,
-    pub final_amount: i128,
     pub timestamp: u64,
 }
 
@@ -655,28 +660,27 @@ impl SavingsGoalContract {
         let event = GoalCreatedEvent {
             goal_id: next_id,
             owner: owner.clone(),
+            amount: 0,
+            new_total: 0,
             name: goal.name.clone(),
             target_amount,
             target_date,
             timestamp: env.ledger().timestamp(),
         };
-        env.events().publish((GOAL_CREATED,), event.clone());
-        env.events().publish(
-            (symbol_short!("savings"), SavingsEvent::GoalCreated),
-            (next_id, owner.clone()),
-        );
+
+        // Standardized event emission for indexers
         RemitwiseEvents::emit(
             &env,
             EventCategory::State,
             EventPriority::Medium,
             GOAL_CREATED,
-            event,
+            event.clone(),
         );
-        RemitwiseEvents::emit(
-            &env,
-            EventCategory::State,
-            EventPriority::Medium,
-            symbol_short!("goal_new"),
+
+        // Legacy/Action-specific topics
+        env.events().publish((GOAL_CREATED,), event);
+        env.events().publish(
+            (symbol_short!("savings"), SavingsEvent::GoalCreated),
             (next_id, owner),
         );
 
@@ -757,37 +761,51 @@ impl SavingsGoalContract {
             new_total,
             timestamp: env.ledger().timestamp(),
         };
+
+        // Standardized event emission for indexers
         RemitwiseEvents::emit(
             &env,
             EventCategory::Transaction,
             EventPriority::Medium,
-            symbol_short!("funds_add"),
-            funds_event,
+            FUNDS_ADDED,
+            funds_event.clone(),
         );
 
-        if was_completed && !previously_completed {
-            let completed_event = GoalCompletedEvent {
-                goal_id,
-                owner: caller.clone(),
-                name: goal.name.clone(),
-                final_amount: new_total,
-                timestamp: env.ledger().timestamp(),
-            };
-            env.events().publish((GOAL_COMPLETED,), completed_event);
-        }
-
-        Self::append_audit(&env, symbol_short!("add"), &caller, true);
+        // Legacy/Action-specific topics
+        env.events().publish((FUNDS_ADDED,), funds_event);
         env.events().publish(
             (symbol_short!("savings"), SavingsEvent::FundsAdded),
             (goal_id, caller.clone(), amount),
         );
 
         if was_completed && !previously_completed {
+            let completed_event = GoalCompletedEvent {
+                goal_id,
+                owner: caller.clone(),
+                amount,
+                new_total,
+                name: goal.name.clone(),
+                timestamp: env.ledger().timestamp(),
+            };
+
+            // Standardized event emission for indexers
+            RemitwiseEvents::emit(
+                &env,
+                EventCategory::State,
+                EventPriority::Medium,
+                GOAL_COMPLETED,
+                completed_event.clone(),
+            );
+
+            // Legacy/Action-specific topics
+            env.events().publish((GOAL_COMPLETED,), completed_event);
             env.events().publish(
                 (symbol_short!("savings"), SavingsEvent::GoalCompleted),
                 (goal_id, caller),
             );
         }
+
+        Self::append_audit(&env, symbol_short!("add"), &caller, true);
 
         Ok(new_total)
     }
@@ -849,28 +867,44 @@ impl SavingsGoalContract {
                 new_total,
                 timestamp: env.ledger().timestamp(),
             };
+
+            // Standardized event emission for indexers
             RemitwiseEvents::emit(
                 &env,
                 EventCategory::Transaction,
                 EventPriority::Medium,
-                symbol_short!("funds_add"),
-                funds_event,
+                FUNDS_ADDED,
+                funds_event.clone(),
             );
-            if was_completed && !previously_completed {
-                let completed_event = GoalCompletedEvent {
-                    goal_id: item.goal_id,
-                    owner: caller.clone(),
-                    name: goal.name.clone(),
-                    final_amount: new_total,
-                    timestamp: env.ledger().timestamp(),
-                };
-                env.events().publish((GOAL_COMPLETED,), completed_event);
-            }
+
+            // Legacy/Action-specific topics
+            env.events().publish((FUNDS_ADDED,), funds_event);
             env.events().publish(
                 (symbol_short!("savings"), SavingsEvent::FundsAdded),
                 (item.goal_id, caller.clone(), item.amount),
             );
+
             if was_completed && !previously_completed {
+                let completed_event = GoalCompletedEvent {
+                    goal_id: item.goal_id,
+                    owner: caller.clone(),
+                    amount: item.amount,
+                    new_total,
+                    name: goal.name.clone(),
+                    timestamp: env.ledger().timestamp(),
+                };
+
+                // Standardized event emission for indexers
+                RemitwiseEvents::emit(
+                    &env,
+                    EventCategory::State,
+                    EventPriority::Medium,
+                    GOAL_COMPLETED,
+                    completed_event.clone(),
+                );
+
+                // Legacy/Action-specific topics
+                env.events().publish((GOAL_COMPLETED,), completed_event);
                 env.events().publish(
                     (symbol_short!("savings"), SavingsEvent::GoalCompleted),
                     (item.goal_id, caller.clone()),
@@ -1005,15 +1039,18 @@ impl SavingsGoalContract {
             new_total: new_amount,
             timestamp: env.ledger().timestamp(),
         };
+
+        // Standardized event emission for indexers
         RemitwiseEvents::emit(
             &env,
             EventCategory::Transaction,
             EventPriority::Medium,
-            symbol_short!("funds_rem"),
-            withdraw_event,
+            FUNDS_WITHDRAWN,
+            withdraw_event.clone(),
         );
 
-        Self::append_audit(&env, symbol_short!("withdraw"), &caller, true);
+        // Legacy/Action-specific topics
+        env.events().publish((FUNDS_WITHDRAWN,), withdraw_event);
         env.events().publish(
             (symbol_short!("savings"), SavingsEvent::FundsWithdrawn),
             (goal_id, caller, amount),
