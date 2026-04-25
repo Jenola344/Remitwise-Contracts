@@ -1591,6 +1591,9 @@ impl FamilyWallet {
     }
 
     /// Set the multisig proposal expiry window in seconds.
+    ///
+    /// # Security
+    /// Only the Owner can set this value, and their role must not be expired.
     pub fn set_proposal_expiry(env: Env, caller: Address, expiry: u64) -> bool {
         caller.require_auth();
         let owner: Address = env
@@ -1598,8 +1601,13 @@ impl FamilyWallet {
             .instance()
             .get(&symbol_short!("OWNER"))
             .unwrap_or_else(|| panic!("Wallet not initialized"));
+
+        // Verify caller is owner AND role is not expired
         if caller != owner {
             panic_with_error!(&env, Error::Unauthorized);
+        }
+        if Self::role_has_expired(&env, &caller) {
+            panic!("Role has expired");
         }
 
         if expiry == 0 || expiry > MAX_PROPOSAL_EXPIRY {
@@ -2193,6 +2201,21 @@ impl FamilyWallet {
         }
         if Self::role_ordinal(member.role) > Self::role_ordinal(min_role) {
             panic!("Insufficient role");
+        }
+    }
+
+    /// Helper to enforce role expiry on admin-level operations.
+    ///
+    /// Combines authorization check with expiry validation in a single call,
+    /// ensuring expired admins cannot perform privileged operations.
+    /// This helper is documented as a pattern for future admin-gated operations.
+    #[allow(dead_code)]
+    fn require_not_expired_admin(env: &Env, caller: &Address) {
+        if !Self::is_owner_or_admin(env, caller) {
+            panic!("Only Owner or Admin can perform this operation");
+        }
+        if Self::role_has_expired(env, caller) {
+            panic!("Role has expired");
         }
     }
 
