@@ -1753,7 +1753,7 @@ impl BillPayments {
                 if let Some(ref r) = bill.external_ref {
                     Self::release_external_ref(&env, &bill.owner, r);
                 }
-                
+
                 let mut list = owner_to_removed
                     .get(bill.owner.clone())
                     .unwrap_or_else(|| Vec::new(&env));
