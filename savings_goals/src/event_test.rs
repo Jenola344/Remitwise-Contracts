@@ -3,7 +3,7 @@
 use super::*;
 use soroban_sdk::{
     testutils::{Address as _, Events, Ledger},
-    Address, Env, String, Symbol, TryFromVal, Val, Vec as SorobanVec,
+    Address, Env, IntoVal, String, Symbol, TryFromVal, Val, Vec as SorobanVec,
 };
 
 fn setup_test(env: &Env) -> (SavingsGoalContractClient, Address) {
@@ -151,16 +151,16 @@ fn test_goal_completed_event_schema() {
     client.add_to_goal(&user, &id, &1000);
 
     // GoalCompletedEvent is published with a single topic (GOAL_COMPLETED,)
-    // It's not using RemitwiseEvents::emit for this specific one in lib.rs currently
-    // Let's verify what it emits
     let events = env.events().all();
-    let completed_event = events
+    let data = events
         .iter()
-        .find(|e| e.1.len() == 1)
-        .expect("GoalCompletedEvent not found");
+        .filter(|e| {
+            e.1.len() == 1
+                && Symbol::try_from_val(&env, &e.1.get_unchecked(0)) == Ok(GOAL_COMPLETED)
+        })
+        .find_map(|e| GoalCompletedEvent::try_from_val(&env, &e.2).ok())
+        .expect("GoalCompletedEvent not found or schema mismatch");
 
-    let data: GoalCompletedEvent =
-        GoalCompletedEvent::try_from_val(&env, &completed_event.2).unwrap();
     assert_eq!(data.goal_id, id);
     assert_eq!(data.owner, user);
     assert_eq!(data.name, name);
