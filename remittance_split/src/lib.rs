@@ -74,6 +74,7 @@ pub enum RemittanceSplitError {
     ScheduleIntervalTooShort = 23,
     /// The schedule lead time exceeds the maximum allowed value.
     ScheduleLeadTimeTooLong = 24,
+    InvalidDeadline = 25,
 }
 
 #[derive(Clone)]
@@ -255,7 +256,21 @@ pub struct AuditPage {
 #[derive(Clone)]
 pub struct SchedulePage {
     pub items: Vec<RemittanceSchedule>,
+    /// Index to pass as `from_index` for the next page. 0 means no more pages.
     pub next_cursor: u32,
+    /// Number of items returned in this page.
+    pub count: u32,
+}
+
+/// Paginated result for remittance schedules with optional cursor.
+#[contracttype]
+#[derive(Clone)]
+pub struct RemittanceSchedulePage {
+    /// Schedule entries for this page, ordered by ID ascending.
+    pub items: Vec<RemittanceSchedule>,
+    /// Cursor to pass as `cursor` for the next page. None means no more pages.
+    pub next_cursor: Option<u32>,
+    /// Number of items returned in this page.
     pub count: u32,
 }
 
@@ -1081,7 +1096,7 @@ impl RemittanceSplit {
             request.total_amount,
             request.deadline,
         );
-        if computed_hash != request_hash {
+        if computed_hash.ne(&request_hash) {
             Self::append_audit(&env, symbol_short!("distH"), &request.from, false);
             return Err(RemittanceSplitError::RequestHashMismatch);
         }
@@ -2202,6 +2217,8 @@ impl RemittanceSplit {
                 n -= 1;
             }
         }
+
+        sort_u32_vec_ascending(&mut schedule_ids);
 
         let len = schedule_ids.len();
         let cap = clamp_limit(limit);

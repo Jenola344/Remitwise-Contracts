@@ -24,8 +24,14 @@ pub const ARCHIVE_LIFETIME_THRESHOLD: u32 = 1 * DAY_IN_LEDGERS; // 1 day
 /// callers know the aggregate may be incomplete.
 pub const MAX_DEP_PAGES: u32 = 20;
 
-/// Maximum number of items returned in a top-N report.
-pub const MAX_ITEMS_PER_REPORT: u32 = 10;
+/// Page size for dependency queries. This is the maximum number of items
+/// fetched per page from bill-payments and insurance contracts.
+/// 
+/// The aggregation loops fetch up to MAX_DEP_PAGES pages, allowing for
+/// up to MAX_DEP_PAGES * DEP_PAGE_LIMIT items to be aggregated.
+/// If the cap is reached, DataAvailability is set to Partial to indicate
+/// the report may be incomplete.
+pub const DEP_PAGE_LIMIT: u32 = 50;
 
 /// Financial health score (0-100)
 #[contracttype]
@@ -818,7 +824,7 @@ impl ReportingContract {
             });
         }
 
-        RemittanceSummary {
+        Ok(RemittanceSummary {
             total_received: total_amount,
             total_allocated: total_amount,
             category_breakdown: breakdown,
@@ -833,6 +839,7 @@ impl ReportingContract {
     /// Aggregates all goals for a user and calculates overall completion progress.
     pub fn get_savings_report(
         env: Env,
+        caller: Address,
         user: Address,
         period_start: u64,
         period_end: u64,
@@ -857,7 +864,7 @@ impl ReportingContract {
             .storage()
             .instance()
             .get(&symbol_short!("ADDRS"))
-            .unwrap_or_else(|| panic!("Contract addresses not configured"));
+            .ok_or(ReportingError::AddressesNotConfigured)?;
 
         let savings_client = SavingsGoalsClient::new(env, &addresses.savings_goals);
         let goals = savings_client.get_all_goals(&user);
@@ -875,9 +882,10 @@ impl ReportingContract {
             }
         }
 
-        let completion_percentage =
-            safe_percent(total_saved, total_target, 100).clamp(0, 100) as u32;
-        SavingsReport {
+        let completion_percentage = safe_percent(total_saved, total_target, 100)
+            .min(100) as u32;
+
+        Ok(SavingsReport {
             total_goals,
             completed_goals: completed_count,
             total_target,
@@ -885,7 +893,7 @@ impl ReportingContract {
             completion_percentage,
             period_start,
             period_end,
-        }
+        })
     }
 
     /// Generate bill payment compliance report.
@@ -893,6 +901,7 @@ impl ReportingContract {
     /// Analyzes bill statuses and payment deadlines for a specific period.
     pub fn get_bill_compliance_report(
         env: Env,
+        caller: Address,
         user: Address,
         period_start: u64,
         period_end: u64,
@@ -917,7 +926,7 @@ impl ReportingContract {
             .storage()
             .instance()
             .get(&symbol_short!("ADDRS"))
-            .unwrap_or_else(|| panic!("Contract addresses not configured"));
+            .ok_or(ReportingError::AddressesNotConfigured)?;
 
         let bill_client = BillPaymentsClient::new(env, &addresses.bill_payments);
 
@@ -934,7 +943,7 @@ impl ReportingContract {
         let mut cursor = 0u32;
         let mut pages_fetched = 0u32;
         loop {
-            let page = bill_client.get_all_bills_for_owner(&user, &cursor, &50u32);
+            let page = bill_client.get_all_bills_for_owner(&user, &cursor, &DEP_PAGE_LIMIT);
             for bill in page.items.iter() {
                 if bill.created_at < period_start || bill.created_at > period_end {
                     continue;
@@ -969,7 +978,7 @@ impl ReportingContract {
             safe_percent(paid_bills as i128, total_bills as i128, 100).clamp(0, 100) as u32
         };
 
-        BillComplianceReport {
+        Ok(BillComplianceReport {
             total_bills,
             paid_bills,
             unpaid_bills,
@@ -989,6 +998,7 @@ impl ReportingContract {
     /// Summarizes active policies, coverage amounts, and premium ratios.
     pub fn get_insurance_report(
         env: Env,
+        caller: Address,
         user: Address,
         period_start: u64,
         period_end: u64,
@@ -1013,7 +1023,7 @@ impl ReportingContract {
             .storage()
             .instance()
             .get(&symbol_short!("ADDRS"))
-            .unwrap_or_else(|| panic!("Contract addresses not configured"));
+            .ok_or(ReportingError::AddressesNotConfigured)?;
 
         let insurance_client = InsuranceClient::new(env, &addresses.insurance);
         let monthly_premium = insurance_client.get_total_monthly_premium(&user);
@@ -1025,7 +1035,7 @@ impl ReportingContract {
         let mut cursor = 0u32;
         let mut pages_fetched = 0u32;
         loop {
-            let page = insurance_client.get_active_policies(&user, &cursor, &50);
+            let page = insurance_client.get_active_policies(&user, &cursor, &DEP_PAGE_LIMIT);
             for policy in page.items.iter() {
                 active_policies += 1;
                 total_coverage += policy.coverage_amount;
@@ -1045,7 +1055,7 @@ impl ReportingContract {
         let coverage_to_premium_ratio =
             safe_percent(total_coverage, annual_premium, 100).clamp(0, u32::MAX as i128) as u32;
 
-        InsuranceReport {
+        Ok(InsuranceReport {
             active_policies,
             total_coverage,
             monthly_premium,
@@ -1072,7 +1082,7 @@ impl ReportingContract {
             .storage()
             .instance()
             .get(&symbol_short!("ADDRS"))
-            .unwrap_or_else(|| panic!("Contract addresses not configured"));
+            .ok_or(ReportingError::AddressesNotConfigured)?;
 
         // Savings score (0-40 points)
         let savings_client = SavingsGoalsClient::new(env, &addresses.savings_goals);
@@ -1117,12 +1127,12 @@ impl ReportingContract {
             .saturating_add(insurance_score)
             .min(100);
 
-        HealthScore {
+        Ok(HealthScore {
             score: total_score,
             savings_score,
             bills_score,
             insurance_score,
-        }
+        })
     }
 
     /// Generate comprehensive financial health report combining all metrics.
@@ -1130,6 +1140,7 @@ impl ReportingContract {
     /// This is the primary reporting entry point for users.
     pub fn get_financial_health_report(
         env: Env,
+        caller: Address,
         user: Address,
         total_remittance: i128,
         period_start: u64,
@@ -1338,7 +1349,8 @@ impl ReportingContract {
     /// Generate trend analysis comparing two data points.
     pub fn get_trend_analysis(
         _env: Env,
-        _user: Address,
+        caller: Address,
+        user: Address,
         current_amount: i128,
         previous_amount: i128,
     ) -> TrendData {
@@ -1442,6 +1454,7 @@ impl ReportingContract {
     /// Retrieve a previously stored report.
     pub fn get_stored_report(
         env: Env,
+        caller: Address,
         user: Address,
         period_key: u64,
     ) -> Option<FinancialHealthReport> {
